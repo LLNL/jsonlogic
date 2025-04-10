@@ -1,0 +1,16 @@
+CMakeFiles/
+build/
+CMakeCache.txt
+Makefile
+*.cmake
+*.so
+testeval.bin
+__pycache__
+**/build
+venv
+*.core
+build
+setup.cfg
+.vscode
+*.egg-info
+.coverage

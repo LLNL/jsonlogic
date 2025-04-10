@@ -1,11 +1,8 @@
-License
+Please see README.md files in the cpp/ and py/ directories
+for specific installation, usage, and other information.
 
-jsonlogic is distributed under the MIT license.
-
-All new contributions must be made under the MIT license.
-
-See LICENSE, NOTICE, and COPYRIGHT for details.
+Please also refer to the LICENSE, NOTICE, and COPYRIGHT files. 
+and contributions.
 
 SPDX-License-Identifier: MIT
-
 LLNL-CODE-835154
