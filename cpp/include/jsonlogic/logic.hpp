@@ -18,35 +18,15 @@ struct type_error : std::runtime_error {
 //
 // API to create an expression
 
-/// the outpuf of translating a json object to an jsonlogic::expr
-struct logic_details
-    : std::tuple<any_expr, std::vector<boost::json::string>, bool> {
-  using base = std::tuple<any_expr, std::vector<boost::json::string>, bool>;
-  using base::base;
-
-  /// the logic expression
-  /// \{
-  any_expr const &synatx_tree() const { return std::get<0>(*this); }
-  // any_expr        expr() &&    { return std::get<0>(std::move(*this)); }
-  /// \}
-
-  /// returns variable names that are not computed
-  /// \{
-  std::vector<boost::json::string> const &variable_names() const {
-    return std::get<1>(*this);
-  }
-  // std::vector<std::string>        variable_names() &&    { return
-  // std::get<1>(std::move(*this)); }
-  /// \}
-
-  /// returns if the expression contains computed names
-  bool has_computed_variable_names() const { return std::get<2>(*this); }
-};
+/// result type of create_logic
+using logic_rule_base = std::tuple<any_expr, std::vector<boost::json::string>, bool>;
 
 /// interprets the json object \ref n as a jsonlogic expression and
 ///   returns a jsonlogic representation together with some information
 ///   on variables inside the jsonlogic expression.
-logic_details create_logic(boost::json::value n);
+logic_rule_base create_logic(boost::json::value n);
+
+
 
 //
 // API to evaluate/apply an expression
@@ -72,6 +52,7 @@ using variable_accessor =
 ///    the version without variable accessors throws an std::runtime_error
 ///    when evaluation accesses a variable.
 /// \{
+any_expr apply(const expr &exp, const variable_accessor &vars);
 any_expr apply(const any_expr &exp, const variable_accessor &vars);
 any_expr apply(const any_expr &exp);
 /// \}
@@ -91,7 +72,7 @@ any_expr apply(boost::json::value rule, boost::json::value data);
 variable_accessor data_accessor(boost::json::value data);
 
 //
-// conversion functions from
+// conversion functions
 
 /// creates a jsonlogic value representation for \ref val
 /// \post any_expr != nullptr
@@ -105,29 +86,67 @@ any_expr to_expr(boost::json::string val);
 any_expr to_expr(const boost::json::array &val);
 /// \}
 
-/// creates a value representation for \ref n in jsonlogic form.
+/// creates a value representation for \p n in jsonlogic form.
 /// \param  n any boost::json type, except for boost::json::object
 /// \return a value in jsonlogic form
-/// \throw  an std::logic_error if \ref n contains a boost::json::object
+/// \throw  an std::logic_error if \p n contains a boost::json::object
 /// \post   any_expr != nullptr
 any_expr to_expr(const boost::json::value &n);
 
-/// creates a json representation from \ref e
-// \todo ...
+/// creates a json representation from \p e
 boost::json::value to_json(const any_expr &e);
 
-/// returns true if \ref el is truthy
+/// returns true if \p el is truthy
 /// \details
 ///    truthy performs the appropriate type conversions
-///    but does not evaluate \ref el, in case it is a
+///    but does not evaluate \p el, in case it is a
 ///    jsonlogic expression.
 bool truthy(const any_expr &el);
 
-/// returns true if \ref el is !truthy
+/// returns true if \p el is !truthy
 bool falsy(const any_expr &el);
 
-/// prints out n to os
+/// prints out \p n to \p os
 /// \pre n must be a value
 std::ostream &operator<<(std::ostream &os, any_expr &n);
+
+
+/// convenience class providing named accessors to logic_rule_base
+struct logic_rule : logic_rule_base {
+    using base = logic_rule_base;
+
+    // no explicit
+    logic_rule(logic_rule_base&& logic_object)
+    : base(std::move(logic_object))
+    {}
+
+    logic_rule(logic_rule&&)            = default;
+    logic_rule& operator=(logic_rule&&) = default;
+    ~logic_rule()                       = default;
+
+    /// the logic expression
+    /// \{
+    any_expr const &synatx_tree() const { return std::get<0>(*this); }
+    // any_expr        expr() &&    { return std::get<0>(std::move(*this)); }
+    /// \}
+
+    /// returns variable names that are not computed
+    /// \{
+    std::vector<boost::json::string> const &variable_names() const {
+      return std::get<1>(*this);
+    }
+    /// \}
+
+    /// returns if the expression contains computed names
+    bool has_computed_variable_names() const { return std::get<2>(*this); }
+
+    // \todo add apply methods
+
+  private:
+    logic_rule()                             = delete;
+    logic_rule(const logic_rule&)            = delete;
+    logic_rule& operator=(const logic_rule&) = delete;
+};
+
 
 } // namespace jsonlogic
