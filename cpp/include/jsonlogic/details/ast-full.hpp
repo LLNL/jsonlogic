@@ -1,8 +1,11 @@
 #pragma once
 
-#include <boost/json.hpp>
+#include <vector>
+#include <map>
 
 #include "ast-core.hpp"
+#include <boost/json.hpp>
+
 #include "cxx-compat.hpp"
 
 #if !defined(WITH_JSONLOGIC_EXTENSIONS)
