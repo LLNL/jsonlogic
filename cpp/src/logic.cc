@@ -1,25 +1,35 @@
+/// implements jsonlogic functions
+
+#include "jsonlogic/logic.hpp"
+
+// standard headers
 #include <algorithm>
 #include <exception>
 #include <iostream>
 #include <limits>
 #include <numeric>
-#include <regex>
 #include <string>
 #include <unordered_map>
 
+#if WITH_JSON_LOGIC_CPP_EXTENSIONS
+#include <regex>
+#endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
+
+// 3rd party headers
 #include <boost/json.hpp>
 
+// jsonlogic complete headers
 #include "jsonlogic/details/ast-full.hpp"
 #include "jsonlogic/details/cxx-compat.hpp"
-#include "jsonlogic/logic.hpp"
-
-namespace json = boost::json;
 
 namespace {
 constexpr bool DEBUG_OUTPUT = false;
 }
 
 namespace jsonlogic {
+
+namespace json = boost::json;
+
 namespace {
 CXX_NORETURN
 void unsupported() {
@@ -433,7 +443,7 @@ oper::container_type translate_children(json::value &n, variable_map &varmap) {
 }
 } // namespace
 
-logic_details create_logic(json::value n) {
+logic_rule_base create_logic(json::value n) {
   variable_map varmap;
   any_expr node = translate_internal(std::move(n), varmap);
   bool hasComputedVariables = varmap.hasComputedVariables();
@@ -2346,7 +2356,7 @@ void evaluator::visit(membership &n) { binary(n, operator_impl<membership>{}); }
 
 #if WITH_JSON_LOGIC_CPP_EXTENSIONS
 void evaluator::visit(regex_match &n) {
-  binary(n, operator_impl<membership>{});
+  binary(n, operator_impl<regex_match>{});
 }
 #endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
 
@@ -2591,12 +2601,6 @@ void evaluator::visit(unsigned_int_value &n) { _value(n); }
 void evaluator::visit(real_value &n) { _value(n); }
 void evaluator::visit(string_value &n) { _value(n); }
 
-any_expr apply(expr &exp, const variable_accessor &vars) {
-  evaluator ev{vars, std::cerr};
-
-  return ev.eval(exp);
-}
-
 any_expr eval_path(const json::string &path, const json::object &obj) {
   if (auto pos = obj.find(path); pos != obj.end())
     return jsonlogic::to_expr(pos->value());
@@ -2616,6 +2620,12 @@ template <class IntT> any_expr eval_index(IntT idx, const json::array &arr) {
 }
 
 } // namespace
+
+any_expr apply(expr &exp, const variable_accessor &vars) {
+  evaluator ev{vars, std::cerr};
+
+  return ev.eval(exp);
+}
 
 any_expr apply(const any_expr &exp, const variable_accessor &vars) {
   assert(exp.get());
@@ -2647,7 +2657,7 @@ variable_accessor data_accessor(json::value data) {
 }
 
 any_expr apply(json::value rule, json::value data) {
-  logic_details logic = create_logic(rule);
+  logic_rule logic(create_logic(rule));
 
   return jsonlogic::apply(logic.synatx_tree(), data_accessor(std::move(data)));
 }
