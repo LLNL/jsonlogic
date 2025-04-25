@@ -24,6 +24,7 @@
 
 namespace {
 constexpr bool DEBUG_OUTPUT = false;
+constexpr int  COMPUTED_VARIABLE_NAME = -1;
 }
 
 namespace jsonlogic {
@@ -224,13 +225,18 @@ namespace {
 struct variable_map {
   void insert(var &el);
   std::vector<json::string> to_vector() const;
-  bool hasComputedVariables() const { return hasComputed; }
+
+  /// accessors for withComputedNames
+  /// \{
+  bool hasComputedVariables() const { return withComputedNames; }
+  void setComputedVariables(bool b) { withComputedNames = b; }
+  /// \}
 
 private:
   using container_type = std::map<json::string, int>;
 
   container_type mapping = {};
-  bool hasComputed = false;
+  bool withComputedNames = false;
 };
 
 void variable_map::insert(var &var) {
@@ -241,16 +247,15 @@ void variable_map::insert(var &var) {
                        str.value().find('[') != json::string::npos);
 
     if (comp) {
-      hasComputed = true;
-    } else if (str.value() !=
-               "") // do nothing for free variables membership "lambdas"
-    {
+      setComputedVariables(true);
+    } else if (str.value() != "") {
+      // do nothing for free variables membership "lambdas"
       auto [pos, success] = mapping.emplace(str.value(), mapping.size());
 
       var.num(pos->second);
     }
   } catch (const type_error &) {
-    hasComputed = true;
+    setComputedVariables(true);
   }
 }
 
@@ -282,6 +287,13 @@ template <class ExprT> ExprT &mkOperator_(json::object &n, variable_map &m) {
 }
 
 template <class ExprT> expr &mk_operator(json::object &n, variable_map &m) {
+  return mkOperator_<ExprT>(n, m);
+}
+
+template <class ExprT> expr &mk_missing(json::object &n, variable_map &m) {
+  // \todo * extract variables from array and only setComputedVariables when needed.
+  //       * check reference implementation when missing is null
+  m.setComputedVariables(true);
   return mkOperator_<ExprT>(n, m);
 }
 
@@ -349,8 +361,8 @@ any_expr translate_internal(json::value n, variable_map &varmap) {
     {"cat", &mk_operator<cat>},
     {"log", &mk_operator<log>},
     {"var", &mk_variable},
-    {"missing", &mk_operator<missing>},
-    {"missing_some", &mk_operator<missing_some>},
+    {"missing", &mk_missing<missing>},
+    {"missing_some", &mk_missing<missing_some>},
 #if WITH_JSON_LOGIC_CPP_EXTENSIONS
     /// extensions
     {"regex", &mk_operator<regex_match>},
@@ -523,6 +535,60 @@ any_expr to_expr(const json::value &n) {
   assert(res.get());
   return res;
 }
+
+any_expr to_expr(value_variant val) {
+  // guard against accidental variant modification
+  //   value_variant = variant<monostate, bool, int64_t, uint64_t, double, string_view>
+  static_assert(std::variant_size_v<value_variant> == 6);
+  static_assert(std::is_same_v<std::monostate,   std::variant_alternative_t<0, value_variant> >);
+  static_assert(std::is_same_v<bool,             std::variant_alternative_t<1, value_variant> >);
+  static_assert(std::is_same_v<std::int64_t,     std::variant_alternative_t<2, value_variant> >);
+  static_assert(std::is_same_v<std::uint64_t,    std::variant_alternative_t<3, value_variant> >);
+  static_assert(std::is_same_v<double,           std::variant_alternative_t<4, value_variant> >);
+  static_assert(std::is_same_v<std::string_view, std::variant_alternative_t<5, value_variant> >);
+
+  any_expr res;
+
+  switch (val.index()) {
+  case 0: {
+    res = to_expr(nullptr);
+    break;
+  }
+
+  case 1: {
+    res = to_expr(std::get<bool>(val));
+    break;
+  }
+
+  case 2: {
+    res = to_expr(std::get<std::int64_t>(val));
+    break;
+  }
+
+  case 3: {
+    res = to_expr(std::get<std::uint64_t>(val));
+    break;
+  }
+
+  case 4: {
+    res = to_expr(std::get<double>(val));
+    break;
+  }
+
+  case 5: {
+    res = to_expr(boost::json::string(std::get<std::string_view>(val)));
+    break;
+  }
+
+  default:
+    // did val hold a valid value?
+    unsupported();
+  }
+
+  assert(res.get());
+  return res;
+}
+
 
 namespace {
 
@@ -2069,6 +2135,7 @@ private:
   }
 };
 
+
 struct sequence_function {
   sequence_function(expr &e, std::ostream &logstream)
       : exp(e), logger(logstream) {}
@@ -2502,7 +2569,7 @@ void evaluator::visit(var &n) {
 
   try {
     calcres = vars(val.to_json(), n.num());
-  } catch (...) {
+  } catch (const variable_resolution_error&) {
     calcres = (n.num_evaluated_operands() > 1) ? eval(n.operand(1))
                                                : to_expr(nullptr);
   }
@@ -2512,13 +2579,14 @@ std::size_t evaluator::missing_aux(array &elems) {
   auto avail = [calc = this](any_expr &v) -> bool {
     try {
       value_base &val = down_cast<value_base>(*v);
+      any_expr    res = calc->vars(val.to_json(), COMPUTED_VARIABLE_NAME);
 
-      calc->vars(val.to_json(), -1 /* logical_not membership varmap */);
-    } catch (...) {
+      // value-missing := res == 0 || *res is a null_value
+      // return !value-missing
+      return res && (may_down_cast<null_value>(*res) == nullptr);
+    } catch (const jsonlogic::variable_resolution_error&) {
       return false;
     }
-
-    return true;
   };
 
   array::iterator beg = elems.begin();
@@ -2601,18 +2669,20 @@ void evaluator::visit(unsigned_int_value &n) { _value(n); }
 void evaluator::visit(real_value &n) { _value(n); }
 void evaluator::visit(string_value &n) { _value(n); }
 
-any_expr eval_path(const json::string &path, const json::object &obj) {
-  if (auto pos = obj.find(path); pos != obj.end())
-    return jsonlogic::to_expr(pos->value());
+any_expr eval_path(const json::string &path, const json::object *obj) {
+  if (obj) {
+    if (auto pos = obj->find(path); pos != obj->end())
+      return jsonlogic::to_expr(pos->value());
 
-  if (std::size_t pos = path.find('.'); pos != json::string::npos) {
-    json::string selector = path.subview(0, pos);
-    json::string suffix = path.subview(pos + 1);
+    if (std::size_t pos = path.find('.'); pos != json::string::npos) {
+      json::string selector = path.subview(0, pos);
+      json::string suffix = path.subview(pos + 1);
 
-    return eval_path(suffix, obj.at(selector).as_object());
+      return eval_path(suffix, obj->at(selector).if_object());
+    }
   }
 
-  throw std::out_of_range("jsonlogic - unable to locate path");
+  throw variable_resolution_error{"in logic.cc::eval_path."};
 }
 
 template <class IntT> any_expr eval_index(IntT idx, const json::array &arr) {
@@ -2634,7 +2704,7 @@ any_expr apply(const any_expr &exp, const variable_accessor &vars) {
 
 any_expr apply(const any_expr &exp) {
   return jsonlogic::apply(exp, [](const json::value &, int) -> any_expr {
-    throw std::runtime_error{"variable not available"};
+    throw std::logic_error{"variable accessor not available"};
   });
 }
 
@@ -2642,7 +2712,7 @@ variable_accessor data_accessor(json::value data) {
   return [data = std::move(data)](const json::value &keyval, int) -> any_expr {
     if (const json::string *ppath = keyval.if_string()) {
       //~ std::cerr << *ppath << std::endl;
-      return ppath->size() ? eval_path(*ppath, data.as_object())
+      return ppath->size() ? eval_path(*ppath, data.if_object())
                            : to_expr(data);
     }
 
@@ -2659,7 +2729,23 @@ variable_accessor data_accessor(json::value data) {
 any_expr apply(json::value rule, json::value data) {
   logic_rule logic(create_logic(rule));
 
-  return jsonlogic::apply(logic.synatx_tree(), data_accessor(std::move(data)));
+  return jsonlogic::apply(logic.syntax_tree(), data_accessor(std::move(data)));
+}
+
+variable_accessor data_accessor(std::vector<value_variant> vars) {
+  return [vars = std::move(vars)](const json::value&, int idx) -> any_expr {
+    if ((idx >= 0) && (std::size_t(idx) < vars.size()))
+    {
+      CXX_LIKELY;
+      return to_expr(vars[idx]);
+    }
+
+    throw std::logic_error{"unable to access (computed) variable"};
+  };
+}
+
+any_expr apply(const any_expr &exp, std::vector<value_variant> vars) {
+  return jsonlogic::apply(exp, data_accessor(std::move(vars)));
 }
 
 namespace {
@@ -2703,6 +2789,35 @@ std::ostream &operator<<(std::ostream &os, any_expr &n) {
 }
 
 expr &oper::operand(int n) const { return deref(this->at(n).get()); }
+
+
+//
+// json_logic_rule
+
+any_expr const &
+logic_rule::syntax_tree() const { return std::get<0>(*this); }
+
+std::vector<boost::json::string> const &
+logic_rule::variable_names() const { return std::get<1>(*this); }
+
+bool
+logic_rule::has_computed_variable_names() const { return std::get<2>(*this); }
+
+any_expr
+logic_rule::apply() const { return jsonlogic::apply( syntax_tree() ); }
+
+any_expr
+logic_rule::apply(const variable_accessor &var_accessor) const
+{
+  return jsonlogic::apply( syntax_tree(), var_accessor );
+}
+
+any_expr
+logic_rule::apply(std::vector<value_variant> vars) const
+{
+  return jsonlogic::apply( syntax_tree(), std::move(vars) );
+}
+
 } // namespace jsonlogic
 
 #if UNSUPPORTED_SUPPLEMENTAL

@@ -10,15 +10,24 @@ namespace jsonlogic {
 //
 // exception classes
 
+/// thrown when no type conversion rules are able to satisy an operation's type requirements
 struct type_error : std::runtime_error {
   using base = std::runtime_error;
   using base::base;
 };
 
+/// thrown when a variable name cannot be found
+struct variable_resolution_error : std::runtime_error {
+  using base = std::runtime_error;
+  using base::base;
+};
+
+
 //
 // API to create an expression
 
 /// result type of create_logic
+// \todo remove dependence on boost::json::string and use std::string_view instead.
 using logic_rule_base = std::tuple<any_expr, std::vector<boost::json::string>, bool>;
 
 /// interprets the json object \ref n as a jsonlogic expression and
@@ -26,16 +35,33 @@ using logic_rule_base = std::tuple<any_expr, std::vector<boost::json::string>, b
 ///   on variables inside the jsonlogic expression.
 logic_rule_base create_logic(boost::json::value n);
 
-
-
 //
 // API to evaluate/apply an expression
 
-/// Type for a callback function to query variables from the context
+/// a type representing views on value types in jsonlogic
+// \todo consider adding std::unique_ptr<boost::json::value> as fallback type.
+using value_variant = std::variant< std::monostate, // or std::nullptr_t ?
+                                    bool,
+                                    std::int64_t,
+                                    std::uint64_t,
+                                    double,
+                                    std::string_view
+                                  >;
+
+
+
+/// Callback function type to query variables from the evaluation context
 /// \param  json::value a json value describing the variable
 /// \param  int         an index for precomputed variable names
 /// \return an any_expr
 /// \post   the returned any_expr MUST be a non-null value
+/// \throw  variable_resolution_error if a variable is not available.
+///         This exception will be caught by the evaluator
+///         and the result replaced by an appropriate value (e.g., nullptr).
+/// \throw  std::logic_error or std::runtime_error for other issues
+///         (e.g., when an accessor does not support computed variable names).
+///         Any exception other than variable_resolution_error will
+///         result in termination.
 /// \todo
 ///   * consider replacing the dependence on the json library by
 ///     a string_view or std::variant<string_view, int ...> ..
@@ -46,15 +72,20 @@ using variable_accessor =
 /// evaluates \ref exp and uses \ref vars to query variables from
 ///   the context.
 /// \param  exp  a jsonlogic expression
-/// \param  vars a variable accessor to retrieve variables from the context
+/// \param  var_accessor a variable accessor to retrieve variables from the context
+/// \param
 /// \return a jsonlogic value
 /// \details
-///    the version without variable accessors throws an std::runtime_error
-///    when evaluation accesses a variable.
+///    * apply(const any_expr &exp) throws a variable_resolution_error
+///      when evaluation accesses a variable.
+///    * any_expr apply(const any_expr &exp, std::vector<value_variant> vars)
+///      throws a variable_resolution_error when a computed variable name
+///      is requested.
 /// \{
-any_expr apply(const expr &exp, const variable_accessor &vars);
-any_expr apply(const any_expr &exp, const variable_accessor &vars);
+any_expr apply(const expr &exp, const variable_accessor &var_accessor);
+any_expr apply(const any_expr &exp, const variable_accessor &var_accessor);
 any_expr apply(const any_expr &exp);
+any_expr apply(const any_expr &exp, std::vector<value_variant> vars);
 /// \}
 
 /// evaluates the rule \ref rule with the provided data \ref data.
@@ -93,6 +124,9 @@ any_expr to_expr(const boost::json::array &val);
 /// \post   any_expr != nullptr
 any_expr to_expr(const boost::json::value &n);
 
+/// creates a value representation for \p val in jsonlogic form.
+any_expr to_expr(value_variant val);
+
 /// creates a json representation from \p e
 boost::json::value to_json(const any_expr &e);
 
@@ -126,21 +160,31 @@ struct logic_rule : logic_rule_base {
 
     /// the logic expression
     /// \{
-    any_expr const &synatx_tree() const { return std::get<0>(*this); }
+    any_expr const &syntax_tree() const;
     // any_expr        expr() &&    { return std::get<0>(std::move(*this)); }
     /// \}
 
-    /// returns variable names that are not computed
-    /// \{
-    std::vector<boost::json::string> const &variable_names() const {
-      return std::get<1>(*this);
-    }
-    /// \}
+    /// returns variable names that are not computed.
+    std::vector<boost::json::string> const &variable_names() const;
 
-    /// returns if the expression contains computed names
-    bool has_computed_variable_names() const { return std::get<2>(*this); }
+    /// returns if the expression contains computed names.
+    bool has_computed_variable_names() const;
 
-    // \todo add apply methods
+    /// evaluates the logic_rule.
+    /// \return a jsonlogic value
+    /// \throws variable_resolution_error when evaluation accesses a variable
+    any_expr apply() const;
+
+    /// evaluates the logic_rule and uses \p var_accessor to query variables.
+    /// \param var_accessor a variable accessor to retrieve variables from the context
+    /// \return a jsonlogic value
+    any_expr apply(const variable_accessor &var_accessor) const;
+
+    /// evaluates the logic_rule and uses \p vars to obtain values for non-computed variable names.
+    /// \param  vars a variable array with values for non-computed variable names.
+    /// \return a jsonlogic value
+    /// \throws variable_resolution_error when evaluation accesses a computed variable name
+    any_expr apply(std::vector<value_variant> vars) const;
 
   private:
     logic_rule()                             = delete;
