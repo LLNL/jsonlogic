@@ -5,6 +5,7 @@
 
 # May work with older but not yet tested
 cmake_minimum_required(VERSION 3.26)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 project( jsonlogic
          VERSION 0.2
@@ -12,20 +13,31 @@ project( jsonlogic
          LANGUAGES CXX)
 
 include(GNUInstallDirs)
+include(FetchContent)
+set(FETCHCONTENT_QUIET OFF)
 
-find_package(Boost 1.80 COMPONENTS json REQUIRED)
 
-include_directories( ${Boost_INCLUDE_DIR} )
+# Download and build Boost::json
+set(BOOST_URL 
+    "https://github.com/boostorg/boost/releases/download/boost-1.87.0/boost-1.87.0-cmake.tar.gz" 
+    CACHE STRING "URL to fetch Boost tarball")
 
-# jsonlogic target
+
+set(BOOST_INCLUDE_LIBRARIES json)
+
+FetchContent_Declare(
+    Boost 
+    URL ${BOOST_URL})
+FetchContent_MakeAvailable(Boost)
+
+
 
 add_library(jsonlogic SHARED src/logic.cc)
-
+target_link_libraries(jsonlogic LINK_PUBLIC Boost::json)
+target_include_directories(jsonlogic PRIVATE include)
 target_compile_options(jsonlogic PUBLIC -Wall -Wextra -pedantic)
 
 
-target_include_directories(jsonlogic PRIVATE include)
-target_link_libraries(jsonlogic LINK_PUBLIC ${Boost_JSON_LIBRARY} )
 set_target_properties(jsonlogic PROPERTIES PUBLIC_HEADER include/jsonlogic/logic.hpp)
 set_property(TARGET jsonlogic PROPERTY CXX_STANDARD 17)
 
@@ -33,6 +45,3 @@ install(TARGETS jsonlogic LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
                              PUBLIC_HEADER DESTINATION "include/jsonlogic")
 install(FILES include/jsonlogic/details/ast-core.hpp DESTINATION "include/jsonlogic/details")
 install(FILES include/jsonlogic/details/ast-full.hpp DESTINATION "include/jsonlogic/details")
-
-#~ add_executable(examples)
-
