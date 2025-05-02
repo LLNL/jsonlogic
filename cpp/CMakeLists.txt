@@ -6,6 +6,7 @@
 # May work with older but not yet tested
 cmake_minimum_required(VERSION 3.26)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 project( jsonlogic
          VERSION 0.2
@@ -24,7 +25,7 @@ set(BOOST_URL
 
 
 set(BOOST_INCLUDE_LIBRARIES json)
-
+set(BUILD_SHARED_LIBS ON)
 FetchContent_Declare(
     Boost 
     URL ${BOOST_URL})
@@ -39,6 +40,7 @@ target_compile_options(jsonlogic PUBLIC -Wall -Wextra -pedantic)
 
 
 set_target_properties(jsonlogic PROPERTIES PUBLIC_HEADER include/jsonlogic/logic.hpp)
+set_target_properties(jsonlogic PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set_property(TARGET jsonlogic PROPERTY CXX_STANDARD 17)
 
 install(TARGETS jsonlogic LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
