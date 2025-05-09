@@ -1,6 +1,6 @@
 #include <faker-cxx/faker.h>
 
-#include <benchjl.hpp>
+#include <bench.hpp>
 #include <boost/json.hpp>
 #include <boost/json/src.hpp>
 #include <iostream>

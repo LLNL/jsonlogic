@@ -32,10 +32,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(Boost)
 
 
-
 add_library(jsonlogic SHARED src/logic.cc)
 target_link_libraries(jsonlogic LINK_PUBLIC Boost::json)
-target_include_directories(jsonlogic PRIVATE include bench/include)
+target_include_directories(jsonlogic PRIVATE include)
 target_compile_options(jsonlogic PUBLIC -Wall -Wextra -pedantic)
 
 
