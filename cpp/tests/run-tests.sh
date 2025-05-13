@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
+JSONDIR="${1}"
+
 function run {
-  for tst in *.json; do
+  for tst in ${JSONDIR}/*.json; do
     echo "testing ${TESTBIN} <$tst"
     ${TESTBIN} <$tst
     res=$?
@@ -14,11 +16,11 @@ function run {
 
 # test using apply(rule, variant_vector) 
 #      with apply(rule, data) as fallback
-TESTBIN="../examples/build/testeval"
+TESTBIN="../build/tests/testeval"
 run
 
 # test using always apply(rule, data)
-TESTBIN="../examples/build/testeval -s"
+TESTBIN="../build/tests/testeval -s"
 run
 
 echo "qed."

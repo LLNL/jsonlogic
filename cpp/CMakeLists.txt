@@ -24,13 +24,14 @@ set(BOOST_URL
     CACHE STRING "URL to fetch Boost tarball")
 
 
-set(BOOST_INCLUDE_LIBRARIES json lexical_cast range)
+set(BOOST_INCLUDE_LIBRARIES json)
 set(BUILD_SHARED_LIBS ON)
 FetchContent_Declare(
     Boost 
     URL ${BOOST_URL})
 FetchContent_MakeAvailable(Boost)
 
+file(GLOB Boost_INCLUDE_DIRS "${Boost_SOURCE_DIR}/libs/*/include")
 
 add_library(jsonlogic SHARED src/logic.cc)
 target_link_libraries(jsonlogic LINK_PUBLIC Boost::json)
@@ -49,3 +50,9 @@ install(FILES include/jsonlogic/details/ast-full.hpp DESTINATION "include/jsonlo
 
 add_subdirectory(bench)
 add_subdirectory(tests)
+
+add_custom_target(test
+    COMMAND ${CMAKE_COMMAND} -E env bash ${CMAKE_SOURCE_DIR}/tests/run-tests.sh ${CMAKE_SOURCE_DIR}/tests/json
+    COMMENT "Running tests with run_tests.sh"
+)
+add_dependencies(test testeval)
