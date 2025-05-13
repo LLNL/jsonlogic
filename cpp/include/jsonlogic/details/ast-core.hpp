@@ -12,7 +12,7 @@ struct expr {
   expr() = default;
   virtual ~expr() = default;
 
-  virtual void accept(visitor &) = 0;
+  virtual void accept(visitor &) const = 0;
 
 private:
   expr(expr &&) = delete;

@@ -1,0 +1,1 @@
+{"rule":{"in":[[-1,0,1],{"var":"x"}]}, "data":{"x": 1},"expected":false}
