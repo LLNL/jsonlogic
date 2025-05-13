@@ -7,9 +7,8 @@ project(jl_tests)
 
 # Add the benchmark executable(s)
 add_executable(testeval src/testeval.cpp)
-target_link_libraries(testeval PRIVATE jsonlogic Boost::json)
+target_link_libraries(testeval PRIVATE jsonlogic Boost::json Boost::lexical_cast Boost::range)
 target_include_directories(testeval PRIVATE
     ${PROJECT_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/include
-    ${Boost_INCLUDE_DIRS}
 )

@@ -24,14 +24,12 @@ set(BOOST_URL
     CACHE STRING "URL to fetch Boost tarball")
 
 
-set(BOOST_INCLUDE_LIBRARIES json)
+set(BOOST_INCLUDE_LIBRARIES json lexical_cast range)
 set(BUILD_SHARED_LIBS ON)
 FetchContent_Declare(
     Boost 
     URL ${BOOST_URL})
 FetchContent_MakeAvailable(Boost)
-
-file(GLOB Boost_INCLUDE_DIRS "${Boost_SOURCE_DIR}/libs/*/include")
 
 add_library(jsonlogic SHARED src/logic.cc)
 target_link_libraries(jsonlogic LINK_PUBLIC Boost::json)
