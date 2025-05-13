@@ -16,6 +16,8 @@ add_executable(jsonlogic_benchmark
     src/benchmark1.cpp  # Replace with your actual benchmark source(s)
 )
 
+add_executable(jl-bench-in src/benchmark-membership.cpp)
+
 set(BUILD_TESTING OFF) # Disable Faker tests
 FetchContent_Declare(faker
     GIT_REPOSITORY https://github.com/cieslarmichal/faker-cxx.git
@@ -31,6 +33,10 @@ target_link_libraries(jsonlogic_benchmark PRIVATE
     faker-cxx
     )
 
+target_link_libraries(jl-bench-in PRIVATE
+    jsonlogic
+    faker-cxx
+    )
 
 # include_directories(${BOOST_INCLUDE_DIRS})
 
@@ -44,8 +50,24 @@ target_link_directories(jsonlogic_benchmark PRIVATE
     # ${Boost_LIBRARY_DIR}/libs/json
     ${ROOT_DIR}/build
 )
+
+target_link_directories(jl-bench-in PRIVATE
+    ${Boost_LIBRARY_DIR}
+    # ${Boost_LIBRARY_DIR}/libs/json
+    ${ROOT_DIR}/build
+)
 # Ensure Boost include directories are available
 target_include_directories(jsonlogic_benchmark PRIVATE
+    ${PROJECT_SOURCE_DIR}/include
+    ${Boost_INCLUDE_DIRS}
+    # ${Boost_INCLUDE_DIR}/libs/json/include
+    ${faker_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include
+    ${Boost_SOURCE_DIR}
+    ${ROOT_DIR}/include
+)
+
+target_include_directories(jl-bench-in PRIVATE
     ${PROJECT_SOURCE_DIR}/include
     ${Boost_INCLUDE_DIRS}
     # ${Boost_INCLUDE_DIR}/libs/json/include

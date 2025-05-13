@@ -14,11 +14,11 @@ function run {
 
 # test using apply(rule, variant_vector) 
 #      with apply(rule, data) as fallback
-TESTBIN="../examples/testeval.bin"
+TESTBIN="../examples/build/testeval"
 run
 
 # test using always apply(rule, data)
-TESTBIN="../examples/testeval.bin -s"
+TESTBIN="../examples/build/testeval -s"
 run
 
 echo "qed."

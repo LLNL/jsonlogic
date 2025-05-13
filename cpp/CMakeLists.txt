@@ -24,7 +24,7 @@ set(BOOST_URL
     CACHE STRING "URL to fetch Boost tarball")
 
 
-set(BOOST_INCLUDE_LIBRARIES json)
+set(BOOST_INCLUDE_LIBRARIES json range)
 set(BUILD_SHARED_LIBS ON)
 FetchContent_Declare(
     Boost 
@@ -33,7 +33,7 @@ FetchContent_MakeAvailable(Boost)
 
 
 add_library(jsonlogic SHARED src/logic.cc)
-target_link_libraries(jsonlogic LINK_PUBLIC Boost::json)
+target_link_libraries(jsonlogic LINK_PUBLIC Boost::json Boost::range)
 target_include_directories(jsonlogic PRIVATE include)
 target_compile_options(jsonlogic PUBLIC -Wall -Wextra -pedantic)
 

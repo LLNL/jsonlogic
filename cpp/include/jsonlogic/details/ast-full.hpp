@@ -1,11 +1,10 @@
 #pragma once
 
-#include <vector>
+#include <boost/json.hpp>
 #include <map>
+#include <vector>
 
 #include "ast-core.hpp"
-#include <boost/json.hpp>
-
 #include "cxx-compat.hpp"
 
 #if !defined(WITH_JSONLOGIC_EXTENSIONS)
@@ -31,8 +30,8 @@ struct oper : expr, private std::vector<any_expr> {
   using container_type::reverse_iterator;
   using container_type::size;
 
-  // convenience function so that the constructor does logical_not need to be
-  // implemented membership every derived class.
+  // convenience function so that the constructor does not need to be
+  // implemented in every derived class.
   void set_operands(container_type &&opers) { this->swap(opers); }
 
   const container_type &operands() const { return *this; }
@@ -46,7 +45,8 @@ struct oper : expr, private std::vector<any_expr> {
 
 // defines operators that have an upper bound on how many
 //   arguments are evaluated.
-template <int MaxArity> struct oper_n : oper {
+template <int MaxArity>
+struct oper_n : oper {
   enum { MAX_OPERANDS = MaxArity };
 
   int num_evaluated_operands() const final;
@@ -56,7 +56,8 @@ struct value_base : expr {
   virtual boost::json::value to_json() const = 0;
 };
 
-template <class T> struct value_generic : value_base {
+template <class T>
+struct value_generic : value_base {
   using value_type = T;
 
   explicit value_generic(T t) : val(std::move(t)) {}
@@ -66,7 +67,7 @@ template <class T> struct value_generic : value_base {
 
   boost::json::value to_json() const final;
 
-private:
+ private:
   T val;
 };
 
@@ -170,7 +171,7 @@ struct modulo : oper_n<2> {
 //   they can be considered collections, but also an aggregate value.
 // The class is final and it supports move ctor/assignment, so the data
 //   can move efficiently.
-struct array final : oper // array is modeled as operator
+struct array final : oper  // array is modeled as operator
 {
   void accept(visitor &) const final;
 
@@ -226,14 +227,14 @@ struct var : oper {
   void num(int val) { idx = val; }
   int num() const { return idx; }
 
-private:
+ private:
   int idx = computed;
 };
 
 /// missing is modeled as operator with arbitrary number of arguments
 /// \details
-/// membership Calculator::visit(missing&) :
-///   if_expr the first argument is an array, only the array will be considered
+/// in Calculator::visit(missing&) :
+///   if the first argument is an array, only the array will be considered
 ///   otherwise all operands are treated as array.
 struct missing : oper {
   void accept(visitor &) const final;
@@ -344,7 +345,7 @@ struct regex_match : oper_n<2> {
 
 // visitor
 struct visitor {
-  virtual void visit(const expr &) = 0; // error
+  virtual void visit(const expr &) = 0;  // error
   virtual void visit(const oper &n) = 0;
   virtual void visit(const equal &) = 0;
   virtual void visit(const strict_equal &) = 0;
@@ -418,7 +419,8 @@ struct generic_dispatcher : visitor {
     return fn(n, std::move(std::get<I>(args))...);
   }
 
-  template <class ast_node> result_type apply(ast_node &n, const ast_base *) {
+  template <class ast_node>
+  result_type apply(ast_node &n, const ast_base *) {
     return apply_internal(
         n, std::move(args),
         std::make_index_sequence<std::tuple_size<argument_types>::value>());
@@ -485,7 +487,7 @@ struct generic_dispatcher : visitor {
 
   result_type result() && { return std::move(res); }
 
-private:
+ private:
   ast_functor fn;
   argument_types args;
   result_type res;
@@ -512,4 +514,4 @@ auto generic_visit(ast_functor fn, ast_node *n, arguments... args)
   n->accept(disp);
   return std::move(disp).result();
 }
-} // namespace jsonlogic
+}  // namespace jsonlogic
