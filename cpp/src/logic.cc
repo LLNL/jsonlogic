@@ -2567,7 +2567,8 @@ void evaluator::visit(const membership &n) {
   any_expr lhs = eval(n.operand(0));
   any_expr rhs = eval(n.operand(1));
 
-  std::cout << "in membership: lhs = " << lhs << ", rhs = " << rhs << std::endl;
+  // std::cout << "in membership: lhs = " << lhs << ", rhs = " << rhs <<
+  // std::endl;
 
   auto array_op = [&lhs](array &arrop) -> any_expr {
     auto beg = arrop.begin();
