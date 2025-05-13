@@ -1,0 +1,1 @@
+{"rule":{"some":[{"var":"y"},{"==":[{"var":""},{"var":"x"}]}]},"data":{"y":["a","b","c"],"x":"b"},"expected":false}
