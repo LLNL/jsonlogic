@@ -24,8 +24,8 @@
 
 namespace {
 constexpr bool DEBUG_OUTPUT = false;
-constexpr int  COMPUTED_VARIABLE_NAME = -1;
-}
+constexpr int COMPUTED_VARIABLE_NAME = -1;
+}  // namespace
 
 namespace jsonlogic {
 
@@ -72,23 +72,30 @@ const T &deref(const std::unique_ptr<T> &p,
 }
 
 //~ template <class T> T &up_cast(T &n) { return n; }
-template <class T> const T &up_cast(const T &n) { return n; }
+template <class T>
+const T &up_cast(const T &n) {
+  return n;
+}
 
-template <class T> struct down_caster_internal {
+template <class T>
+struct down_caster_internal {
   T *operator()(const expr &) const { return nullptr; }
 
   T *operator()(const T &o) const { return &o; }
 };
 
-template <class T> const T *may_down_cast(const expr &e) {
+template <class T>
+const T *may_down_cast(const expr &e) {
   return generic_visit(down_caster_internal<T>{}, &e);
 }
 
-template <class T> T *may_down_cast(expr &e) {
-  return dynamic_cast<T*>(&e); // \todo replace dynamic_cast
+template <class T>
+T *may_down_cast(expr &e) {
+  return dynamic_cast<T *>(&e);  // \todo replace dynamic_cast
 }
 
-template <class T> const T &down_cast(const expr &e) {
+template <class T>
+const T &down_cast(const expr &e) {
   if (T *casted = may_down_cast<T>(e)) {
     CXX_LIKELY;
     return *casted;
@@ -97,7 +104,8 @@ template <class T> const T &down_cast(const expr &e) {
   throw_type_error();
 }
 
-template <class T> T &down_cast(expr &e) {
+template <class T>
+T &down_cast(expr &e) {
   if (T *casted = may_down_cast<T>(e)) {
     CXX_LIKELY;
     return *casted;
@@ -105,7 +113,7 @@ template <class T> T &down_cast(expr &e) {
 
   throw_type_error();
 }
-} // namespace
+}  // namespace
 
 //
 // foundation classes
@@ -163,7 +171,8 @@ void regex_match::accept(visitor &v) const { v.visit(*this); }
 #endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
 
 // to_json implementations
-template <class T> json::value value_generic<T>::to_json() const {
+template <class T>
+json::value value_generic<T>::to_json() const {
   return value();
 }
 
@@ -172,12 +181,13 @@ json::value null_value::to_json() const { return value(); }
 // num_evaluated_operands implementations
 int oper::num_evaluated_operands() const { return size(); }
 
-template <int MaxArity> int oper_n<MaxArity>::num_evaluated_operands() const {
+template <int MaxArity>
+int oper_n<MaxArity>::num_evaluated_operands() const {
   return std::min(MaxArity, oper::num_evaluated_operands());
 }
 
 struct forwarding_visitor : visitor {
-  void visit(const expr &) override {} // error
+  void visit(const expr &) override {}  // error
   void visit(const oper &n) override { visit(up_cast<expr>(n)); }
   void visit(const equal &n) override { visit(up_cast<oper>(n)); }
   void visit(const strict_equal &n) override { visit(up_cast<oper>(n)); }
@@ -219,7 +229,9 @@ struct forwarding_visitor : visitor {
   void visit(const null_value &n) override { visit(up_cast<value_base>(n)); }
   void visit(const bool_value &n) override { visit(up_cast<value_base>(n)); }
   void visit(const int_value &n) override { visit(up_cast<value_base>(n)); }
-  void visit(const unsigned_int_value &n) override { visit(up_cast<value_base>(n)); }
+  void visit(const unsigned_int_value &n) override {
+    visit(up_cast<value_base>(n));
+  }
   void visit(const real_value &n) override { visit(up_cast<value_base>(n)); }
   void visit(const string_value &n) override { visit(up_cast<value_base>(n)); }
 
@@ -246,7 +258,7 @@ struct variable_map {
   void setComputedVariables(bool b) { withComputedNames = b; }
   /// \}
 
-private:
+ private:
   using container_type = std::map<json::string, int>;
 
   container_type mapping = {};
@@ -263,7 +275,7 @@ void variable_map::insert(var &var) {
     if (comp) {
       setComputedVariables(true);
     } else if (str.value() != "") {
-      // do nothing for free variables membership "lambdas"
+      // do nothing for free variables in "lambdas"
       auto [pos, success] = mapping.emplace(str.value(), mapping.size());
 
       var.num(pos->second);
@@ -291,7 +303,8 @@ oper::container_type translate_children(json::array &children, variable_map &);
 oper::container_type translate_children(json::value &n, variable_map &);
 /// \}
 
-template <class ExprT> ExprT &mkOperator_(json::object &n, variable_map &m) {
+template <class ExprT>
+ExprT &mkOperator_(json::object &n, variable_map &m) {
   assert(n.size() == 1);
 
   ExprT &res = deref(new ExprT);
@@ -300,12 +313,15 @@ template <class ExprT> ExprT &mkOperator_(json::object &n, variable_map &m) {
   return res;
 }
 
-template <class ExprT> expr &mk_operator(json::object &n, variable_map &m) {
+template <class ExprT>
+expr &mk_operator(json::object &n, variable_map &m) {
   return mkOperator_<ExprT>(n, m);
 }
 
-template <class ExprT> expr &mk_missing(json::object &n, variable_map &m) {
-  // \todo * extract variables from array and only setComputedVariables when needed.
+template <class ExprT>
+expr &mk_missing(json::object &n, variable_map &m) {
+  // \todo * extract variables from array and only setComputedVariables when
+  // needed.
   //       * check reference implementation when missing is null
   m.setComputedVariables(true);
   return mkOperator_<ExprT>(n, m);
@@ -325,7 +341,8 @@ array &mk_array(json::array &children, variable_map &m) {
   return res;
 }
 
-template <class value_t> value_t &mk_value(typename value_t::value_type n) {
+template <class value_t>
+value_t &mk_value(typename value_t::value_type n) {
   return deref(new value_t(std::move(n)));
 }
 
@@ -336,109 +353,108 @@ using dispatch_table =
 
 dispatch_table::const_iterator lookup(const dispatch_table &m,
                                       const json::object &op) {
-  if (op.size() != 1)
-    return m.end();
+  if (op.size() != 1) return m.end();
 
   return m.find(op.begin()->key());
 }
 
 any_expr translate_internal(json::value n, variable_map &varmap) {
   static const dispatch_table dt = {
-    {"==", &mk_operator<equal>},
-    {"===", &mk_operator<strict_equal>},
-    {"!=", &mk_operator<not_equal>},
-    {"!==", &mk_operator<strict_not_equal>},
-    {"if", &mk_operator<if_expr>},
-    {"!", &mk_operator<logical_not>},
-    {"!!", &mk_operator<logical_not_not>},
-    {"or", &mk_operator<logical_or>},
-    {"and", &mk_operator<logical_and>},
-    {">", &mk_operator<greater>},
-    {">=", &mk_operator<greater_or_equal>},
-    {"<", &mk_operator<less>},
-    {"<=", &mk_operator<less_or_equal>},
-    {"max", &mk_operator<max>},
-    {"min", &mk_operator<min>},
-    {"+", &mk_operator<add>},
-    {"-", &mk_operator<subtract>},
-    {"*", &mk_operator<multiply>},
-    {"/", &mk_operator<divide>},
-    {"%", &mk_operator<modulo>},
-    {"map", &mk_operator<map>},
-    {"reduce", &mk_operator<reduce>},
-    {"filter", &mk_operator<filter>},
-    {"all", &mk_operator<all>},
-    {"none", &mk_operator<none>},
-    {"some", &mk_operator<some>},
-    {"merge", &mk_operator<merge>},
-    {"in", &mk_operator<membership>},
-    {"cat", &mk_operator<cat>},
-    {"log", &mk_operator<log>},
-    {"var", &mk_variable},
-    {"missing", &mk_missing<missing>},
-    {"missing_some", &mk_missing<missing_some>},
+      {"==", &mk_operator<equal>},
+      {"===", &mk_operator<strict_equal>},
+      {"!=", &mk_operator<not_equal>},
+      {"!==", &mk_operator<strict_not_equal>},
+      {"if", &mk_operator<if_expr>},
+      {"!", &mk_operator<logical_not>},
+      {"!!", &mk_operator<logical_not_not>},
+      {"or", &mk_operator<logical_or>},
+      {"and", &mk_operator<logical_and>},
+      {">", &mk_operator<greater>},
+      {">=", &mk_operator<greater_or_equal>},
+      {"<", &mk_operator<less>},
+      {"<=", &mk_operator<less_or_equal>},
+      {"max", &mk_operator<max>},
+      {"min", &mk_operator<min>},
+      {"+", &mk_operator<add>},
+      {"-", &mk_operator<subtract>},
+      {"*", &mk_operator<multiply>},
+      {"/", &mk_operator<divide>},
+      {"%", &mk_operator<modulo>},
+      {"map", &mk_operator<map>},
+      {"reduce", &mk_operator<reduce>},
+      {"filter", &mk_operator<filter>},
+      {"all", &mk_operator<all>},
+      {"none", &mk_operator<none>},
+      {"some", &mk_operator<some>},
+      {"merge", &mk_operator<merge>},
+      {"in", &mk_operator<membership>},
+      {"cat", &mk_operator<cat>},
+      {"log", &mk_operator<log>},
+      {"var", &mk_variable},
+      {"missing", &mk_missing<missing>},
+      {"missing_some", &mk_missing<missing_some>},
 #if WITH_JSON_LOGIC_CPP_EXTENSIONS
-    /// extensions
-    {"regex", &mk_operator<regex_match>},
+      /// extensions
+      {"regex", &mk_operator<regex_match>},
 #endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
   };
 
   expr *res = nullptr;
 
   switch (n.kind()) {
-  case json::kind::object: {
-    json::object &obj = n.get_object();
-    dispatch_table::const_iterator pos = lookup(dt, obj);
+    case json::kind::object: {
+      json::object &obj = n.get_object();
+      dispatch_table::const_iterator pos = lookup(dt, obj);
 
-    if (pos != dt.end()) {
-      CXX_LIKELY;
-      res = &pos->second(obj, varmap);
-    } else {
-      // does jsonlogic support value objects?
-      unsupported();
+      if (pos != dt.end()) {
+        CXX_LIKELY;
+        res = &pos->second(obj, varmap);
+      } else {
+        // does jsonlogic support value objects?
+        unsupported();
+      }
+
+      break;
     }
 
-    break;
-  }
+    case json::kind::array: {
+      // array is an operator that combines its subexpressions into an array
+      res = &mk_array(n.get_array(), varmap);
+      break;
+    }
 
-  case json::kind::array: {
-    // array is an operator that combines its subexpressions into an array
-    res = &mk_array(n.get_array(), varmap);
-    break;
-  }
+    case json::kind::string: {
+      res = &mk_value<string_value>(std::move(n.get_string()));
+      break;
+    }
 
-  case json::kind::string: {
-    res = &mk_value<string_value>(std::move(n.get_string()));
-    break;
-  }
+    case json::kind::int64: {
+      res = &mk_value<int_value>(n.get_int64());
+      break;
+    }
 
-  case json::kind::int64: {
-    res = &mk_value<int_value>(n.get_int64());
-    break;
-  }
+    case json::kind::uint64: {
+      res = &mk_value<unsigned_int_value>(n.get_uint64());
+      break;
+    }
 
-  case json::kind::uint64: {
-    res = &mk_value<unsigned_int_value>(n.get_uint64());
-    break;
-  }
+    case json::kind::double_: {
+      res = &mk_value<real_value>(n.get_double());
+      break;
+    }
 
-  case json::kind::double_: {
-    res = &mk_value<real_value>(n.get_double());
-    break;
-  }
+    case json::kind::bool_: {
+      res = &mk_value<bool_value>(n.get_bool());
+      break;
+    }
 
-  case json::kind::bool_: {
-    res = &mk_value<bool_value>(n.get_bool());
-    break;
-  }
+    case json::kind::null: {
+      res = &mk_null_value();
+      break;
+    }
 
-  case json::kind::null: {
-    res = &mk_null_value();
-    break;
-  }
-
-  default:
-    unsupported();
+    default:
+      unsupported();
   }
 
   return any_expr(res);
@@ -467,7 +483,7 @@ oper::container_type translate_children(json::value &n, variable_map &varmap) {
   res.emplace_back(translate_internal(n, varmap));
   return res;
 }
-} // namespace
+}  // namespace
 
 logic_rule_base create_logic(json::value n) {
   variable_map varmap;
@@ -507,43 +523,43 @@ any_expr to_expr(const json::value &n) {
   any_expr res;
 
   switch (n.kind()) {
-  case json::kind::string: {
-    res = to_expr(n.get_string());
-    break;
-  }
+    case json::kind::string: {
+      res = to_expr(n.get_string());
+      break;
+    }
 
-  case json::kind::int64: {
-    res = to_expr(n.get_int64());
-    break;
-  }
+    case json::kind::int64: {
+      res = to_expr(n.get_int64());
+      break;
+    }
 
-  case json::kind::uint64: {
-    res = to_expr(n.get_uint64());
-    break;
-  }
+    case json::kind::uint64: {
+      res = to_expr(n.get_uint64());
+      break;
+    }
 
-  case json::kind::double_: {
-    res = to_expr(n.get_double());
-    break;
-  }
+    case json::kind::double_: {
+      res = to_expr(n.get_double());
+      break;
+    }
 
-  case json::kind::bool_: {
-    res = to_expr(n.get_bool());
-    break;
-  }
+    case json::kind::bool_: {
+      res = to_expr(n.get_bool());
+      break;
+    }
 
-  case json::kind::null: {
-    res = to_expr(nullptr);
-    break;
-  }
+    case json::kind::null: {
+      res = to_expr(nullptr);
+      break;
+    }
 
-  case json::kind::array: {
-    res = to_expr(n.get_array());
-    break;
-  }
+    case json::kind::array: {
+      res = to_expr(n.get_array());
+      break;
+    }
 
-  default:
-    unsupported();
+    default:
+      unsupported();
   }
 
   assert(res.get());
@@ -552,57 +568,63 @@ any_expr to_expr(const json::value &n) {
 
 any_expr to_expr(value_variant val) {
   // guard against accidental variant modification
-  //   value_variant = variant<monostate, bool, int64_t, uint64_t, double, string_view>
+  //   value_variant = variant<monostate, bool, int64_t, uint64_t, double,
+  //   string_view>
   static_assert(std::variant_size_v<value_variant> == 6);
-  static_assert(std::is_same_v<std::monostate,   std::variant_alternative_t<0, value_variant> >);
-  static_assert(std::is_same_v<bool,             std::variant_alternative_t<1, value_variant> >);
-  static_assert(std::is_same_v<std::int64_t,     std::variant_alternative_t<2, value_variant> >);
-  static_assert(std::is_same_v<std::uint64_t,    std::variant_alternative_t<3, value_variant> >);
-  static_assert(std::is_same_v<double,           std::variant_alternative_t<4, value_variant> >);
-  static_assert(std::is_same_v<std::string_view, std::variant_alternative_t<5, value_variant> >);
+  static_assert(std::is_same_v<std::monostate,
+                               std::variant_alternative_t<0, value_variant> >);
+  static_assert(
+      std::is_same_v<bool, std::variant_alternative_t<1, value_variant> >);
+  static_assert(std::is_same_v<std::int64_t,
+                               std::variant_alternative_t<2, value_variant> >);
+  static_assert(std::is_same_v<std::uint64_t,
+                               std::variant_alternative_t<3, value_variant> >);
+  static_assert(
+      std::is_same_v<double, std::variant_alternative_t<4, value_variant> >);
+  static_assert(std::is_same_v<std::string_view,
+                               std::variant_alternative_t<5, value_variant> >);
 
   any_expr res;
 
   switch (val.index()) {
-  case 0: {
-    res = to_expr(nullptr);
-    break;
-  }
+    case 0: {
+      res = to_expr(nullptr);
+      break;
+    }
 
-  case 1: {
-    res = to_expr(std::get<bool>(val));
-    break;
-  }
+    case 1: {
+      res = to_expr(std::get<bool>(val));
+      break;
+    }
 
-  case 2: {
-    res = to_expr(std::get<std::int64_t>(val));
-    break;
-  }
+    case 2: {
+      res = to_expr(std::get<std::int64_t>(val));
+      break;
+    }
 
-  case 3: {
-    res = to_expr(std::get<std::uint64_t>(val));
-    break;
-  }
+    case 3: {
+      res = to_expr(std::get<std::uint64_t>(val));
+      break;
+    }
 
-  case 4: {
-    res = to_expr(std::get<double>(val));
-    break;
-  }
+    case 4: {
+      res = to_expr(std::get<double>(val));
+      break;
+    }
 
-  case 5: {
-    res = to_expr(boost::json::string(std::get<std::string_view>(val)));
-    break;
-  }
+    case 5: {
+      res = to_expr(boost::json::string(std::get<std::string_view>(val)));
+      break;
+    }
 
-  default:
-    // did val hold a valid value?
-    unsupported();
+    default:
+      // did val hold a valid value?
+      unsupported();
   }
 
   assert(res.get());
   return res;
 }
-
 
 namespace {
 
@@ -726,15 +748,11 @@ struct comparison_operator_base {
 };
 
 template <class T>
-T
-to_calc_type(const T* val)
-{
+T to_calc_type(const T *val) {
   return *val;
 }
 
-std::string_view
-to_calc_type(const json::string* val)
-{
+std::string_view to_calc_type(const json::string *val) {
   return std::string_view{val->data(), val->size()};
 }
 /*
@@ -744,12 +762,7 @@ to_calc_type(std::nullptr_t el)
   return el;
 }
 */
-const array*
-to_calc_type(const array* arr)
-{
-  return arr;
-}
-
+const array *to_calc_type(const array *arr) { return arr; }
 
 /// \brief a strict equality operator operates on operands of the same
 ///        type. The operation on two different types returns false.
@@ -764,73 +777,70 @@ struct strict_equality_operator : comparison_operator_base {
   }
 
   template <class LhsT, class RhsT>
-  std::tuple<decltype(to_calc_type(std::declval<const LhsT*>())),
-             decltype(to_calc_type(std::declval<const RhsT*>()))>
+  std::tuple<decltype(to_calc_type(std::declval<const LhsT *>())),
+             decltype(to_calc_type(std::declval<const RhsT *>()))>
   coerce(const LhsT *lv, const RhsT *rv) {
     return {to_calc_type(lv), to_calc_type(rv)};
   }
 
-  std::tuple<std::nullptr_t, std::nullptr_t>
-  coerce(std::nullptr_t, std::nullptr_t) {
-    return {nullptr, nullptr}; // two null pointers are equal
+  std::tuple<std::nullptr_t, std::nullptr_t> coerce(std::nullptr_t,
+                                                    std::nullptr_t) {
+    return {nullptr, nullptr};  // two null pointers are equal
   }
 
   template <class LhsT>
-  std::tuple<decltype(to_calc_type(std::declval<const LhsT*>())), std::nullptr_t>
+  std::tuple<decltype(to_calc_type(std::declval<const LhsT *>())),
+             std::nullptr_t>
   coerce(const LhsT *lv, std::nullptr_t) {
     return {to_calc_type(lv), nullptr};
   }
 
   template <class RhsT>
-  std::tuple<std::nullptr_t, decltype(to_calc_type(std::declval<const RhsT*>()))>
+  std::tuple<std::nullptr_t,
+             decltype(to_calc_type(std::declval<const RhsT *>()))>
   coerce(std::nullptr_t, const RhsT *rv) {
     return {nullptr, to_calc_type(rv)};
   }
 };
 
 struct numeric_binary_operator_base {
-  std::tuple<double, double>
-  coerce(const double *lv, const double *rv) {
+  std::tuple<double, double> coerce(const double *lv, const double *rv) {
     return {*lv, *rv};
   }
 
-  std::tuple<double, double>
-  coerce(const double *lv, const std::int64_t *rv) {
+  std::tuple<double, double> coerce(const double *lv, const std::int64_t *rv) {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
-  std::tuple<double, double>
-  coerce(const double *lv, const std::uint64_t *rv) {
+  std::tuple<double, double> coerce(const double *lv, const std::uint64_t *rv) {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
-  std::tuple<double, double>
-  coerce(const std::int64_t *lv, const double *rv) {
+  std::tuple<double, double> coerce(const std::int64_t *lv, const double *rv) {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<std::int64_t, std::int64_t>
-  coerce(const std::int64_t *lv, const std::int64_t *rv) {
+  std::tuple<std::int64_t, std::int64_t> coerce(const std::int64_t *lv,
+                                                const std::int64_t *rv) {
     return {*lv, *rv};
   }
 
-  std::tuple<std::int64_t, std::int64_t>
-  coerce(const std::int64_t *lv, const std::uint64_t *rv) {
+  std::tuple<std::int64_t, std::int64_t> coerce(const std::int64_t *lv,
+                                                const std::uint64_t *rv) {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
-  std::tuple<double, double>
-  coerce(const std::uint64_t *lv, const double *rv) {
+  std::tuple<double, double> coerce(const std::uint64_t *lv, const double *rv) {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<std::int64_t, std::int64_t>
-  coerce(const std::uint64_t *lv, const std::int64_t *rv) {
+  std::tuple<std::int64_t, std::int64_t> coerce(const std::uint64_t *lv,
+                                                const std::int64_t *rv) {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<std::uint64_t, std::uint64_t>
-  coerce(const std::uint64_t *lv, const std::uint64_t *rv) {
+  std::tuple<std::uint64_t, std::uint64_t> coerce(const std::uint64_t *lv,
+                                                  const std::uint64_t *rv) {
     return {*lv, *rv};
   }
 };
@@ -841,85 +851,78 @@ struct numeric_binary_operator_base {
 struct relational_operator_base : numeric_binary_operator_base {
   using numeric_binary_operator_base::coerce;
 
-  std::tuple<double, double>
-  coerce(const double *lv, const json::string *rv) {
+  std::tuple<double, double> coerce(const double *lv, const json::string *rv) {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
-  std::tuple<double, double>
-  coerce(const double *lv, const bool *rv) {
+  std::tuple<double, double> coerce(const double *lv, const bool *rv) {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
-  std::tuple<std::int64_t, std::int64_t>
-  coerce(const std::int64_t *lv, const json::string *rv) {
+  std::tuple<std::int64_t, std::int64_t> coerce(const std::int64_t *lv,
+                                                const json::string *rv) {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
-  std::tuple<std::int64_t, std::int64_t>
-  coerce(const std::int64_t *lv, const bool *rv) {
+  std::tuple<std::int64_t, std::int64_t> coerce(const std::int64_t *lv,
+                                                const bool *rv) {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
-  std::tuple<std::uint64_t, std::uint64_t>
-  coerce(const std::uint64_t *lv, const json::string *rv) {
+  std::tuple<std::uint64_t, std::uint64_t> coerce(const std::uint64_t *lv,
+                                                  const json::string *rv) {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
-  std::tuple<std::uint64_t, std::uint64_t>
-  coerce(const std::uint64_t *lv, const bool *rv) {
+  std::tuple<std::uint64_t, std::uint64_t> coerce(const std::uint64_t *lv,
+                                                  const bool *rv) {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
-  std::tuple<double, double>
-  coerce(const json::string *lv, const double *rv) {
+  std::tuple<double, double> coerce(const json::string *lv, const double *rv) {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<double, double>
-  coerce(const bool *lv, const double *rv) {
+  std::tuple<double, double> coerce(const bool *lv, const double *rv) {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<std::int64_t, std::int64_t>
-  coerce(const json::string *lv, const std::int64_t *rv) {
+  std::tuple<std::int64_t, std::int64_t> coerce(const json::string *lv,
+                                                const std::int64_t *rv) {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<std::int64_t, std::int64_t>
-  coerce(const bool *lv, const std::int64_t *rv) {
+  std::tuple<std::int64_t, std::int64_t> coerce(const bool *lv,
+                                                const std::int64_t *rv) {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<std::uint64_t, std::uint64_t>
-  coerce(const json::string *lv, const std::uint64_t *rv) {
+  std::tuple<std::uint64_t, std::uint64_t> coerce(const json::string *lv,
+                                                  const std::uint64_t *rv) {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<std::uint64_t, std::uint64_t>
-  coerce(const bool *lv, const std::uint64_t *rv) {
+  std::tuple<std::uint64_t, std::uint64_t> coerce(const bool *lv,
+                                                  const std::uint64_t *rv) {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<bool, bool>
-  coerce(const json::string *, const bool *) {
+  std::tuple<bool, bool> coerce(const json::string *, const bool *) {
     // strings and boolean are never equal
     return {true, false};
   }
 
-  std::tuple<bool, bool>
-  coerce(const bool *, const json::string *) {
+  std::tuple<bool, bool> coerce(const bool *, const json::string *) {
     // strings and boolean are never equal
     return {true, false};
   }
 
-  std::tuple<std::string_view, std::string_view>
-  coerce(const json::string *lv, const json::string *rv) {
+  std::tuple<std::string_view, std::string_view> coerce(
+      const json::string *lv, const json::string *rv) {
     return {to_calc_type(lv), to_calc_type(rv)};
   }
 
-  std::tuple<bool, bool>
-  coerce(const bool *lv, const bool *rv) {
+  std::tuple<bool, bool> coerce(const bool *lv, const bool *rv) {
     return {*lv, *rv};
   }
 };
@@ -930,22 +933,18 @@ struct equality_operator : relational_operator_base, comparison_operator_base {
   // due to special conversion rules, the coercion function may just produce
   //   the result instead of just unpacking and coercing values.
 
-  std::tuple<bool, bool>
-  coerce(const array *, const array *) {
-    return {true, false}; // arrays are never equal
+  std::tuple<bool, bool> coerce(const array *, const array *) {
+    return {true, false};  // arrays are never equal
   }
 
   template <class T>
-  std::tuple<bool, bool>
-  coerce(const T *lv, const array *rv) {
+  std::tuple<bool, bool> coerce(const T *lv, const array *rv) {
     // an array may be compared to a value_base
     //   (1) *lv == arr[0], iff the array has exactly one element
-    if (rv->num_evaluated_operands() == 1)
-      throw unpacked_array_req{};
+    if (rv->num_evaluated_operands() == 1) throw unpacked_array_req{};
 
     //   (2) or if [] and *lv converts to false
-    if (rv->num_evaluated_operands() > 1)
-      return {false, true};
+    if (rv->num_evaluated_operands() > 1) return {false, true};
 
     const bool convToFalse = to_concrete(*lv, false) == false;
 
@@ -953,45 +952,38 @@ struct equality_operator : relational_operator_base, comparison_operator_base {
   }
 
   template <class T>
-  std::tuple<bool, bool>
-  coerce(const array *lv, const T *rv) {
-    // see comments membership coerce(T*,array*)
-    if (lv->num_evaluated_operands() == 1)
-      throw unpacked_array_req{};
+  std::tuple<bool, bool> coerce(const array *lv, const T *rv) {
+    // see comments in coerce(T*,array*)
+    if (lv->num_evaluated_operands() == 1) throw unpacked_array_req{};
 
-    if (lv->num_evaluated_operands() > 1)
-      return {false, true};
+    if (lv->num_evaluated_operands() > 1) return {false, true};
 
     const bool convToFalse = to_concrete(*rv, false) == false;
 
     return {true /* zero elements */, convToFalse};
   }
 
-  std::tuple<std::nullptr_t, std::nullptr_t>
-  coerce(std::nullptr_t, std::nullptr_t) {
-    return {nullptr, nullptr}; // two null pointers are equal
+  std::tuple<std::nullptr_t, std::nullptr_t> coerce(std::nullptr_t,
+                                                    std::nullptr_t) {
+    return {nullptr, nullptr};  // two null pointers are equal
   }
 
   template <class T>
-  std::tuple<bool, bool>
-  coerce(const T *, std::nullptr_t) {
-    return {false, true}; // null pointer is only equal to itself
+  std::tuple<bool, bool> coerce(const T *, std::nullptr_t) {
+    return {false, true};  // null pointer is only equal to itself
   }
 
   template <class T>
-  std::tuple<bool, bool>
-  coerce(std::nullptr_t, const T *) {
-    return {true, false}; // null pointer is only equal to itself
+  std::tuple<bool, bool> coerce(std::nullptr_t, const T *) {
+    return {true, false};  // null pointer is only equal to itself
   }
 
-  std::tuple<bool, bool>
-  coerce(const array *, std::nullptr_t) {
-    return {true, false}; // null pointer is only equal to itself
+  std::tuple<bool, bool> coerce(const array *, std::nullptr_t) {
+    return {true, false};  // null pointer is only equal to itself
   }
 
-  std::tuple<bool, bool>
-  coerce(std::nullptr_t, const array *) {
-    return {true, false}; // null pointer is only equal to itself
+  std::tuple<bool, bool> coerce(std::nullptr_t, const array *) {
+    return {true, false};  // null pointer is only equal to itself
   }
 };
 
@@ -999,20 +991,19 @@ struct relational_operator : relational_operator_base,
                              comparison_operator_base {
   using relational_operator_base::coerce;
 
-  std::tuple<const array *, const array *>
-  coerce(const array *lv, const array *rv) { return {lv, rv}; }
+  std::tuple<const array *, const array *> coerce(const array *lv,
+                                                  const array *rv) {
+    return {lv, rv};
+  }
 
   template <class T>
-  std::tuple<bool, bool>
-  coerce(const T *lv, const array *rv) {
+  std::tuple<bool, bool> coerce(const T *lv, const array *rv) {
     // an array may be equal to another value_base if
     //   (1) *lv == arr[0], iff the array has exactly one element
-    if (rv->num_evaluated_operands() == 1)
-      throw unpacked_array_req{};
+    if (rv->num_evaluated_operands() == 1) throw unpacked_array_req{};
 
     //   (2) or if [] and *lv converts to false
-    if (rv->num_evaluated_operands() > 1)
-      return {false, true};
+    if (rv->num_evaluated_operands() > 1) return {false, true};
 
     const bool convToTrue = to_concrete(*lv, true) == true;
 
@@ -1020,73 +1011,66 @@ struct relational_operator : relational_operator_base,
   }
 
   template <class T>
-  std::tuple<bool, bool>
-  coerce(const array *lv, const T *rv) {
-    // see comments membership coerce(T*,array*)
-    if (lv->num_evaluated_operands() == 1)
-      throw unpacked_array_req{};
+  std::tuple<bool, bool> coerce(const array *lv, const T *rv) {
+    // see comments in coerce(T*,array*)
+    if (lv->num_evaluated_operands() == 1) throw unpacked_array_req{};
 
-    if (lv->num_evaluated_operands() > 1)
-      return {false, true};
+    if (lv->num_evaluated_operands() > 1) return {false, true};
 
     const bool convToTrue = to_concrete(*rv, true) == true;
 
     return {false /* zero elements */, convToTrue};
   }
 
-  std::tuple<std::nullptr_t, std::nullptr_t>
-  coerce(std::nullptr_t, std::nullptr_t) {
-    return {nullptr, nullptr}; // two null pointers are equal
+  std::tuple<std::nullptr_t, std::nullptr_t> coerce(std::nullptr_t,
+                                                    std::nullptr_t) {
+    return {nullptr, nullptr};  // two null pointers are equal
   }
 
-  std::tuple<bool, bool>
-  coerce(const bool *lv, std::nullptr_t) {
-    return {*lv, false}; // null pointer -> false
+  std::tuple<bool, bool> coerce(const bool *lv, std::nullptr_t) {
+    return {*lv, false};  // null pointer -> false
   }
 
-  std::tuple<std::int64_t, std::int64_t>
-  coerce(const std::int64_t *lv, std::nullptr_t) {
-    return {*lv, 0}; // null pointer -> 0
+  std::tuple<std::int64_t, std::int64_t> coerce(const std::int64_t *lv,
+                                                std::nullptr_t) {
+    return {*lv, 0};  // null pointer -> 0
   }
 
-  std::tuple<std::uint64_t, std::uint64_t>
-  coerce(const std::uint64_t *lv, std::nullptr_t) {
-    return {*lv, 0}; // null pointer -> 0
+  std::tuple<std::uint64_t, std::uint64_t> coerce(const std::uint64_t *lv,
+                                                  std::nullptr_t) {
+    return {*lv, 0};  // null pointer -> 0
   }
 
-  std::tuple<double, double>
-  coerce(const double *lv, std::nullptr_t) {
-    return {*lv, 0}; // null pointer -> 0.0
+  std::tuple<double, double> coerce(const double *lv, std::nullptr_t) {
+    return {*lv, 0};  // null pointer -> 0.0
   }
 
-  std::tuple<std::string_view, std::nullptr_t>
-  coerce(const json::string *lv, std::nullptr_t) {
-    return {to_calc_type(lv), nullptr}; // requires special handling
+  std::tuple<std::string_view, std::nullptr_t> coerce(const json::string *lv,
+                                                      std::nullptr_t) {
+    return {to_calc_type(lv), nullptr};  // requires special handling
   }
 
-  std::tuple<bool, bool>
-  coerce(std::nullptr_t, const bool *rv) {
-    return {false, *rv}; // null pointer -> false
+  std::tuple<bool, bool> coerce(std::nullptr_t, const bool *rv) {
+    return {false, *rv};  // null pointer -> false
   }
 
-  std::tuple<std::int64_t, std::int64_t>
-  coerce(std::nullptr_t, const std::int64_t *rv) {
-    return {0, *rv}; // null pointer -> 0
+  std::tuple<std::int64_t, std::int64_t> coerce(std::nullptr_t,
+                                                const std::int64_t *rv) {
+    return {0, *rv};  // null pointer -> 0
   }
 
-  std::tuple<std::uint64_t, std::uint64_t>
-  coerce(std::nullptr_t, const std::uint64_t *rv) {
-    return {0, *rv}; // null pointer -> 0
+  std::tuple<std::uint64_t, std::uint64_t> coerce(std::nullptr_t,
+                                                  const std::uint64_t *rv) {
+    return {0, *rv};  // null pointer -> 0
   }
 
-  std::tuple<double, double>
-  coerce(std::nullptr_t, const double *rv) {
-    return {0, *rv}; // null pointer -> 0
+  std::tuple<double, double> coerce(std::nullptr_t, const double *rv) {
+    return {0, *rv};  // null pointer -> 0
   }
 
-  std::tuple<std::nullptr_t, std::string_view>
-  coerce(std::nullptr_t, const json::string *rv) {
-    return {nullptr, to_calc_type(rv)}; // requires special handling
+  std::tuple<std::nullptr_t, std::string_view> coerce(std::nullptr_t,
+                                                      const json::string *rv) {
+    return {nullptr, to_calc_type(rv)};  // requires special handling
   }
 };
 // @}
@@ -1106,38 +1090,38 @@ struct arithmetic_operator : numeric_binary_operator_base {
 
   using numeric_binary_operator_base::coerce;
 
-  std::tuple<std::nullptr_t, std::nullptr_t>
-  coerce(const double *, std::nullptr_t) {
+  std::tuple<std::nullptr_t, std::nullptr_t> coerce(const double *,
+                                                    std::nullptr_t) {
     return {nullptr, nullptr};
   }
 
-  std::tuple<std::nullptr_t, std::nullptr_t>
-  coerce(const std::int64_t *, std::nullptr_t) {
+  std::tuple<std::nullptr_t, std::nullptr_t> coerce(const std::int64_t *,
+                                                    std::nullptr_t) {
     return {nullptr, nullptr};
   }
 
-  std::tuple<std::nullptr_t, std::nullptr_t>
-  coerce(const std::uint64_t *, std::nullptr_t) {
+  std::tuple<std::nullptr_t, std::nullptr_t> coerce(const std::uint64_t *,
+                                                    std::nullptr_t) {
     return {nullptr, nullptr};
   }
 
-  std::tuple<std::nullptr_t, std::nullptr_t>
-  coerce(std::nullptr_t, const double *) {
+  std::tuple<std::nullptr_t, std::nullptr_t> coerce(std::nullptr_t,
+                                                    const double *) {
     return {nullptr, nullptr};
   }
 
-  std::tuple<std::nullptr_t, std::nullptr_t>
-  coerce(std::nullptr_t, const std::int64_t *) {
+  std::tuple<std::nullptr_t, std::nullptr_t> coerce(std::nullptr_t,
+                                                    const std::int64_t *) {
     return {nullptr, nullptr};
   }
 
-  std::tuple<std::nullptr_t, std::nullptr_t>
-  coerce(std::nullptr_t, const std::uint64_t *) {
+  std::tuple<std::nullptr_t, std::nullptr_t> coerce(std::nullptr_t,
+                                                    const std::uint64_t *) {
     return {nullptr, nullptr};
   }
 
-  std::tuple<std::nullptr_t, std::nullptr_t>
-  coerce(std::nullptr_t, std::nullptr_t) {
+  std::tuple<std::nullptr_t, std::nullptr_t> coerce(std::nullptr_t,
+                                                    std::nullptr_t) {
     return {nullptr, nullptr};
   }
 };
@@ -1167,9 +1151,10 @@ struct string_operator_non_destructive {
 
   using result_type = any_expr;
 
-  std::tuple<std::string_view, std::string_view>
-  coerce(const json::string *lv, const json::string *rv) {
-    return {std::string_view{lv->data(), lv->size()}, std::string_view{rv->data(), rv->size()}};
+  std::tuple<std::string_view, std::string_view> coerce(
+      const json::string *lv, const json::string *rv) {
+    return {std::string_view{lv->data(), lv->size()},
+            std::string_view{rv->data(), rv->size()}};
   }
 };
 
@@ -1185,8 +1170,10 @@ struct array_operator {
 
   using result_type = any_expr;
 
-  std::tuple<const array *, const array *>
-  coerce(const array *lv, const array *rv) { return {lv, rv}; }
+  std::tuple<const array *, const array *> coerce(const array *lv,
+                                                  const array *rv) {
+    return {lv, rv};
+  }
 };
 
 /*
@@ -1224,7 +1211,7 @@ any_expr convert(any_expr val, const arithmetic_operator &) {
 
     any_expr result() && { return std::move(res); }
 
-  private:
+   private:
     any_expr res;
   };
 
@@ -1318,7 +1305,7 @@ any_expr convert(any_expr val, const string_operator_non_destructive &) {
 
     any_expr result() && { return std::move(res); }
 
-  private:
+   private:
     any_expr res;
   };
 
@@ -1362,7 +1349,7 @@ any_expr convert(any_expr val, const array_operator &) {
 
     any_expr result() && { return std::move(val); }
 
-  private:
+   private:
     any_expr val;
   };
 
@@ -1373,10 +1360,12 @@ any_expr convert(any_expr val, const array_operator &) {
   return std::move(conv).result();
 }
 
-template <class value_t> struct unpacker : forwarding_visitor {
+template <class value_t>
+struct unpacker : forwarding_visitor {
   void assign(value_t &lhs, const value_t &val) { lhs = val; }
 
-  template <class U> void assign(value_t &lhs, const U &val) {
+  template <class U>
+  void assign(value_t &lhs, const U &val) {
     lhs = to_concrete(val, lhs);
   }
 
@@ -1408,22 +1397,25 @@ template <class value_t> struct unpacker : forwarding_visitor {
 
   value_t result() && { return std::move(res); }
 
-private:
+ private:
   value_t res;
 };
 
-template <class T> T unpack_value(expr &expr) {
+template <class T>
+T unpack_value(expr &expr) {
   unpacker<T> unpack;
 
   expr.accept(unpack);
   return std::move(unpack).result();
 }
 
-template <class T> T unpack_value(const any_expr &el) {
+template <class T>
+T unpack_value(const any_expr &el) {
   return unpack_value<T>(*el);
 }
 
-template <class T> T unpack_value(any_expr &&el) {
+template <class T>
+T unpack_value(any_expr &&el) {
   return unpack_value<T>(*el);
 }
 
@@ -1433,7 +1425,7 @@ bool truthy(expr &el) { return unpack_value<bool>(el); }
 bool truthy(any_expr &&el) { return unpack_value<bool>(std::move(el)); }
 bool falsy(expr &el) { return !truthy(el); }
 // bool falsy(any_expr&& el)  { return !truthy(std::move(el)); }
-} // namespace
+}  // namespace
 
 bool truthy(const any_expr &el) { return unpack_value<bool>(el); }
 bool falsy(const any_expr &el) { return !truthy(el); }
@@ -1466,7 +1458,8 @@ struct expr_cloner {
     return deref(new value_t(n.value()));
   }
 
-  template <class oper_t> expr &clone(const oper_t &n, const oper &) const {
+  template <class oper_t>
+  expr &clone(const oper_t &n, const oper &) const {
     return init(n, deref(new oper_t));
   }
 
@@ -1475,7 +1468,10 @@ struct expr_cloner {
   }
   /// \}
 
-  template <class expr_t> expr *operator()(expr_t &n) { return &clone(n, n); }
+  template <class expr_t>
+  expr *operator()(expr_t &n) {
+    return &clone(n, n);
+  }
 };
 
 expr &expr_cloner::init(const oper &src, oper &tgt) const {
@@ -1525,10 +1521,12 @@ struct binary_operator_visitor_2 : forwarding_visitor {
   binary_operator_visitor_2(lhs_value_t lval, binary_op_t oper)
       : lv(lval), op(oper), res() {}
 
-  template <class rhs_value_t> void calc(rhs_value_t rv) {
+  template <class rhs_value_t>
+  void calc(rhs_value_t rv) {
     auto [ll, rr] = op.coerce(lv, rv);
 
-    //~ std::cerr << lv << " -- " << rv << " " << typeid(ll).name() << std::endl;
+    //~ std::cerr << lv << " -- " << rv << " " << typeid(ll).name() <<
+    // std::endl;
     res = op(std::move(ll), std::move(rr));
     //~ std::cerr << lv << " == " << rv << std::endl;
   }
@@ -1536,22 +1534,19 @@ struct binary_operator_visitor_2 : forwarding_visitor {
   void visit(const expr &) final { throw_type_error(); }
 
   void visit(const string_value &n) final {
-    if constexpr (binary_op_t::defined_for_string)
-      return calc(&n.value());
+    if constexpr (binary_op_t::defined_for_string) return calc(&n.value());
 
     throw_type_error();
   }
 
   void visit(const null_value &) final {
-    if constexpr (binary_op_t::defined_for_null)
-      return calc(nullptr);
+    if constexpr (binary_op_t::defined_for_null) return calc(nullptr);
 
     throw_type_error();
   }
 
   void visit(const bool_value &n) final {
-    if constexpr (binary_op_t::defined_for_boolean)
-      return calc(&n.value());
+    if constexpr (binary_op_t::defined_for_boolean) return calc(&n.value());
 
     throw_type_error();
   }
@@ -1595,8 +1590,7 @@ struct binary_operator_visitor_2 : forwarding_visitor {
   }
 
   void visit(const real_value &n) final {
-    if constexpr (binary_op_t::defined_for_real)
-      return calc(&n.value());
+    if constexpr (binary_op_t::defined_for_real) return calc(&n.value());
 
     throw_type_error();
   }
@@ -1618,7 +1612,7 @@ struct binary_operator_visitor_2 : forwarding_visitor {
 
   result_type result() && { return std::move(res); }
 
-private:
+ private:
   lhs_value_t lv;
   binary_op_t op;
   result_type res;
@@ -1631,7 +1625,8 @@ struct binary_operator_visitor : forwarding_visitor {
   binary_operator_visitor(binary_op_t oper, const any_expr &rhsarg)
       : op(oper), rhs(rhsarg), res() {}
 
-  template <class LhsValue> void calc(LhsValue lv) {
+  template <class LhsValue>
+  void calc(LhsValue lv) {
     using rhs_visitor = binary_operator_visitor_2<binary_op_t, LhsValue>;
 
     rhs_visitor vis{lv, op};
@@ -1641,22 +1636,19 @@ struct binary_operator_visitor : forwarding_visitor {
   }
 
   void visit(const string_value &n) final {
-    if constexpr (binary_op_t::defined_for_string)
-      return calc(&n.value());
+    if constexpr (binary_op_t::defined_for_string) return calc(&n.value());
 
     throw_type_error();
   }
 
   void visit(const null_value &) final {
-    if constexpr (binary_op_t::defined_for_null)
-      return calc(nullptr);
+    if constexpr (binary_op_t::defined_for_null) return calc(nullptr);
 
     throw_type_error();
   }
 
   void visit(const bool_value &n) final {
-    if constexpr (binary_op_t::defined_for_boolean)
-      return calc(&n.value());
+    if constexpr (binary_op_t::defined_for_boolean) return calc(&n.value());
 
     throw_type_error();
   }
@@ -1700,8 +1692,7 @@ struct binary_operator_visitor : forwarding_visitor {
   }
 
   void visit(const real_value &n) final {
-    if constexpr (binary_op_t::defined_for_real)
-      return calc(&n.value());
+    if constexpr (binary_op_t::defined_for_real) return calc(&n.value());
 
     throw_type_error();
   }
@@ -1723,7 +1714,7 @@ struct binary_operator_visitor : forwarding_visitor {
 
   result_type result() && { return std::move(res); }
 
-private:
+ private:
   binary_op_t op;
   const any_expr &rhs;
   result_type res;
@@ -1733,8 +1724,8 @@ private:
 // compute and sequence functions
 
 template <class binary_op_t>
-typename binary_op_t::result_type
-compute(const any_expr &lhs, const any_expr &rhs, binary_op_t op) {
+typename binary_op_t::result_type compute(const any_expr &lhs,
+                                          const any_expr &rhs, binary_op_t op) {
   using lhs_visitor = binary_operator_visitor<binary_op_t>;
 
   assert(lhs.get() && rhs.get());
@@ -1746,15 +1737,14 @@ compute(const any_expr &lhs, const any_expr &rhs, binary_op_t op) {
 }
 
 template <class binary_predicate_t>
-bool compare_sequence(const array &lv, const array &rv, binary_predicate_t pred) {
+bool compare_sequence(const array &lv, const array &rv,
+                      binary_predicate_t pred) {
   const std::size_t lsz = lv.num_evaluated_operands();
   const std::size_t rsz = rv.num_evaluated_operands();
 
-  if (lsz == 0)
-    return pred(false, rsz != 0);
+  if (lsz == 0) return pred(false, rsz != 0);
 
-  if (rsz == 0)
-    return pred(true, false);
+  if (rsz == 0) return pred(true, false);
 
   std::size_t const len = std::min(lsz, rsz);
   std::size_t i = 0;
@@ -1774,7 +1764,8 @@ bool compare_sequence(const array &lv, const array &rv, binary_predicate_t pred)
 }
 
 template <class binary_predicate_t>
-bool compare_sequence(const array *lv, const array *rv, binary_predicate_t pred) {
+bool compare_sequence(const array *lv, const array *rv,
+                      binary_predicate_t pred) {
   return compare_sequence(deref(lv), deref(rv), std::move(pred));
 }
 
@@ -1787,14 +1778,12 @@ bool compare_sequence(const array *lv, const array *rv, binary_predicate_t pred)
 /// \tparam R operator result type
 /// \{
 template <class U, class V, class R>
-struct mismatched_types
-{
+struct mismatched_types {
   using type = R;
 };
 
 template <class T, class R>
-struct mismatched_types<T,T,R>
-{
+struct mismatched_types<T, T, R> {
   // missing "using type" triggers SFINAE exclusion for matching types
 };
 /// \}
@@ -1802,62 +1791,76 @@ struct mismatched_types<T,T,R>
 //
 // the calc operator implementations
 
-template <class> struct operator_impl {};
+template <class>
+struct operator_impl {};
 
-template <> struct operator_impl<equal> : equality_operator {
+template <>
+struct operator_impl<equal> : equality_operator {
   using equality_operator::result_type;
 
   template <class U, class V>
-  auto operator()(const U&, const V&) const -> typename mismatched_types<U, V, result_type>::type {
+  auto operator()(const U &, const V &) const ->
+      typename mismatched_types<U, V, result_type>::type {
     return false;
   }
 
-  template <class T> auto operator()(const T &lhs, const T &rhs) const -> result_type {
+  template <class T>
+  auto operator()(const T &lhs, const T &rhs) const -> result_type {
     return lhs == rhs;
   }
 };
 
-template <> struct operator_impl<not_equal> : equality_operator {
+template <>
+struct operator_impl<not_equal> : equality_operator {
   using equality_operator::result_type;
 
   template <class U, class V>
-  auto operator()(const U&, const V&) const -> typename mismatched_types<U, V, result_type>::type {
+  auto operator()(const U &, const V &) const ->
+      typename mismatched_types<U, V, result_type>::type {
     return true;
   }
 
-  template <class T> auto operator()(const T &lhs, const T &rhs) const -> result_type {
+  template <class T>
+  auto operator()(const T &lhs, const T &rhs) const -> result_type {
     return lhs != rhs;
   }
 };
 
-template <> struct operator_impl<strict_equal> : strict_equality_operator {
+template <>
+struct operator_impl<strict_equal> : strict_equality_operator {
   using strict_equality_operator::result_type;
 
   template <class U, class V>
-  auto operator()(const U&, const V&) const -> typename mismatched_types<U, V, result_type>::type {
+  auto operator()(const U &, const V &) const ->
+      typename mismatched_types<U, V, result_type>::type {
     return false;
   }
 
-  template <class T> auto operator()(const T &lhs, const T &rhs) const -> result_type {
-    std::cerr << lhs << " <> " << rhs << std::endl;
+  template <class T>
+  auto operator()(const T &lhs, const T &rhs) const -> result_type {
+    // std::cerr << lhs << " <> " << rhs << std::endl;
     return lhs == rhs;
   }
 };
 
-template <> struct operator_impl<strict_not_equal> : strict_equality_operator {
+template <>
+struct operator_impl<strict_not_equal> : strict_equality_operator {
   using strict_equality_operator::result_type;
 
   template <class U, class V>
-  auto operator()(const U&, const V&) const -> typename mismatched_types<U, V, result_type>::type {
+  auto operator()(const U &, const V &) const ->
+      typename mismatched_types<U, V, result_type>::type {
     return true;
   }
 
-  template <class T> auto operator()(const T &lhs, const T &rhs) const -> result_type {
+  template <class T>
+  auto operator()(const T &lhs, const T &rhs) const -> result_type {
     return lhs != rhs;
   }
 };
 
-template <> struct operator_impl<less> : relational_operator {
+template <>
+struct operator_impl<less> : relational_operator {
   using relational_operator::result_type;
 
   result_type operator()(const std::nullptr_t, std::nullptr_t) const {
@@ -1876,12 +1879,14 @@ template <> struct operator_impl<less> : relational_operator {
     return false;
   }
 
-  template <class T> result_type operator()(const T &lhs, const T &rhs) const {
+  template <class T>
+  result_type operator()(const T &lhs, const T &rhs) const {
     return lhs < rhs;
   }
 };
 
-template <> struct operator_impl<greater> : relational_operator {
+template <>
+struct operator_impl<greater> : relational_operator {
   using relational_operator::result_type;
 
   result_type operator()(const std::nullptr_t, std::nullptr_t) const {
@@ -1900,12 +1905,14 @@ template <> struct operator_impl<greater> : relational_operator {
     return false;
   }
 
-  template <class T> result_type operator()(const T &lhs, const T &rhs) const {
+  template <class T>
+  result_type operator()(const T &lhs, const T &rhs) const {
     return rhs < lhs;
   }
 };
 
-template <> struct operator_impl<less_or_equal> : relational_operator {
+template <>
+struct operator_impl<less_or_equal> : relational_operator {
   using relational_operator::result_type;
 
   result_type operator()(const std::nullptr_t, std::nullptr_t) const {
@@ -1924,12 +1931,14 @@ template <> struct operator_impl<less_or_equal> : relational_operator {
     return rhs.empty();
   }
 
-  template <class T> result_type operator()(const T &lhs, const T &rhs) const {
+  template <class T>
+  result_type operator()(const T &lhs, const T &rhs) const {
     return lhs <= rhs;
   }
 };
 
-template <> struct operator_impl<greater_or_equal> : relational_operator {
+template <>
+struct operator_impl<greater_or_equal> : relational_operator {
   using relational_operator::result_type;
 
   result_type operator()(const std::nullptr_t, std::nullptr_t) const {
@@ -1948,48 +1957,56 @@ template <> struct operator_impl<greater_or_equal> : relational_operator {
     return rhs.empty();
   }
 
-  template <class T> result_type operator()(const T &lhs, const T &rhs) const {
+  template <class T>
+  result_type operator()(const T &lhs, const T &rhs) const {
     return rhs <= lhs;
   }
 };
 
-template <> struct operator_impl<add> : arithmetic_operator {
+template <>
+struct operator_impl<add> : arithmetic_operator {
   using arithmetic_operator::result_type;
 
   result_type operator()(std::nullptr_t, std::nullptr_t) const {
     return to_expr(nullptr);
   }
 
-  template <class T> result_type operator()(const T &lhs, const T &rhs) const {
+  template <class T>
+  result_type operator()(const T &lhs, const T &rhs) const {
     return to_expr(lhs + rhs);
   }
 };
 
-template <> struct operator_impl<subtract> : arithmetic_operator {
+template <>
+struct operator_impl<subtract> : arithmetic_operator {
   using arithmetic_operator::result_type;
 
   result_type operator()(std::nullptr_t, std::nullptr_t) const {
     return to_expr(nullptr);
   }
 
-  template <class T> result_type operator()(const T &lhs, const T &rhs) const {
+  template <class T>
+  result_type operator()(const T &lhs, const T &rhs) const {
     return to_expr(lhs - rhs);
   }
 };
 
-template <> struct operator_impl<multiply> : arithmetic_operator {
+template <>
+struct operator_impl<multiply> : arithmetic_operator {
   using arithmetic_operator::result_type;
 
   result_type operator()(std::nullptr_t, std::nullptr_t) const {
     return to_expr(nullptr);
   }
 
-  template <class T> result_type operator()(const T &lhs, const T &rhs) const {
+  template <class T>
+  result_type operator()(const T &lhs, const T &rhs) const {
     return to_expr(lhs * rhs);
   }
 };
 
-template <> struct operator_impl<divide> : arithmetic_operator {
+template <>
+struct operator_impl<divide> : arithmetic_operator {
   using arithmetic_operator::result_type;
 
   result_type operator()(std::nullptr_t, std::nullptr_t) const {
@@ -2003,70 +2020,77 @@ template <> struct operator_impl<divide> : arithmetic_operator {
     return to_expr(res);
   }
 
-  template <class Int_t> result_type operator()(Int_t lhs, Int_t rhs) const {
-    if (lhs % rhs)
-      return (*this)(double(lhs), double(rhs));
+  template <class Int_t>
+  result_type operator()(Int_t lhs, Int_t rhs) const {
+    if (lhs % rhs) return (*this)(double(lhs), double(rhs));
 
     return to_expr(lhs / rhs);
   }
 };
 
-template <> struct operator_impl<modulo> : integer_arithmetic_operator {
+template <>
+struct operator_impl<modulo> : integer_arithmetic_operator {
   using integer_arithmetic_operator::result_type;
 
   std::nullptr_t operator()(std::nullptr_t, std::nullptr_t) const {
     return nullptr;
   }
 
-  template <class T> result_type operator()(const T &lhs, const T &rhs) const {
-    if (rhs == 0)
-      return to_expr(nullptr);
+  template <class T>
+  result_type operator()(const T &lhs, const T &rhs) const {
+    if (rhs == 0) return to_expr(nullptr);
 
     return to_expr(lhs % rhs);
   }
 };
 
-template <> struct operator_impl<min> : arithmetic_operator {
+template <>
+struct operator_impl<min> : arithmetic_operator {
   using arithmetic_operator::result_type;
 
   result_type operator()(const std::nullptr_t, std::nullptr_t) const {
     return nullptr;
   }
 
-  template <class T> result_type operator()(const T &lhs, const T &rhs) const {
+  template <class T>
+  result_type operator()(const T &lhs, const T &rhs) const {
     return to_expr(std::min(lhs, rhs));
   }
 };
 
-template <> struct operator_impl<max> : arithmetic_operator {
+template <>
+struct operator_impl<max> : arithmetic_operator {
   using arithmetic_operator::result_type;
 
   result_type operator()(const std::nullptr_t, std::nullptr_t) const {
     return nullptr;
   }
 
-  template <class T> result_type operator()(const T &lhs, const T &rhs) const {
+  template <class T>
+  result_type operator()(const T &lhs, const T &rhs) const {
     return to_expr(std::max(lhs, rhs));
   }
 };
 
-template <> struct operator_impl<logical_not> {
+template <>
+struct operator_impl<logical_not> {
   using result_type = bool;
 
   result_type operator()(expr &val) const { return falsy(val); }
 };
 
-template <> struct operator_impl<logical_not_not> {
+template <>
+struct operator_impl<logical_not_not> {
   using result_type = bool;
 
   result_type operator()(expr &val) const { return truthy(val); }
 };
 
-template <> struct operator_impl<cat> : string_operator_non_destructive {
+template <>
+struct operator_impl<cat> : string_operator_non_destructive {
   using string_operator_non_destructive::result_type;
 
-  result_type
-  operator()(std::string_view lhs, std::string_view rhs) const {
+  result_type operator()(std::string_view lhs, std::string_view rhs) const {
     json::string tmp;
 
     tmp.reserve(lhs.size() + rhs.size());
@@ -2078,18 +2102,14 @@ template <> struct operator_impl<cat> : string_operator_non_destructive {
   }
 };
 
-
 /// implements the string mode of the membership operator
 ///    the mode testing element in an array is implemented
 ///    in the evaluator::visit function.
 template <>
-struct operator_impl<membership>
-   : string_operator_non_destructive
-{
+struct operator_impl<membership> : string_operator_non_destructive {
   using string_operator_non_destructive::result_type;
 
-  result_type
-  operator()(std::string_view lhs, std::string_view rhs) const {
+  result_type operator()(std::string_view lhs, std::string_view rhs) const {
     const bool res = (rhs.find(lhs) != json::string::npos);
 
     return to_expr(res);
@@ -2099,12 +2119,11 @@ struct operator_impl<membership>
 #if WITH_JSON_LOGIC_CPP_EXTENSIONS
 template <>
 struct operator_impl<regex_match>
-    : string_operator_non_destructive // \todo the conversion rules differ
+    : string_operator_non_destructive  // \todo the conversion rules differ
 {
   using string_operator_non_destructive::result_type;
 
-  result_type
-  operator()(std::string_view lhs, std::string_view rhs) const {
+  result_type operator()(std::string_view lhs, std::string_view rhs) const {
     std::regex rgx(lhs.c_str(), lhs.size());
 
     return to_expr(std::regex_search(rhs.begin(), rhs.end(), rgx));
@@ -2112,15 +2131,16 @@ struct operator_impl<regex_match>
 };
 #endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
 
-template <> struct operator_impl<merge> : array_operator {
+template <>
+struct operator_impl<merge> : array_operator {
   using array_operator::result_type;
 
   result_type operator()(const array *ll, const array *rr) const {
     // note, to use the lhs directly, it would need to be released
     //   from its any_expr
-    array* lhs = const_cast<array *>(ll);
-    array* rhs = const_cast<array *>(rr);
-    array& res = deref(new array);
+    array *lhs = const_cast<array *>(ll);
+    array *rhs = const_cast<array *>(rr);
+    array &res = deref(new array);
 
     {
       oper::container_type &opers = res.operands();
@@ -2195,7 +2215,7 @@ struct evaluator : forwarding_visitor {
 
   any_expr eval(const expr &n);
 
-private:
+ private:
   variable_accessor vars;
   std::ostream &logger;
   any_expr calcres;
@@ -2212,46 +2232,49 @@ private:
   template <class binary_predicate_t>
   void eval_pair_short_circuit(const oper &n, binary_predicate_t pred);
 
-  /// returns the first expression membership [ e1, e2, e3 ] that evaluates to
+  /// returns the first expression in [ e1, e2, e3 ] that evaluates to
   /// val,
   ///   or the last expression otherwise
   void eval_short_circuit(const oper &n, bool val);
 
   /// reduction operation on all elements
-  template <class binary_op_t> void reduce_sequence(const oper &n, binary_op_t op);
+  template <class binary_op_t>
+  void reduce_sequence(const oper &n, binary_op_t op);
 
   /// computes unary operation on n[0]
-  template <class UnaryOperator> void unary(const oper &n, UnaryOperator calc);
+  template <class UnaryOperator>
+  void unary(const oper &n, UnaryOperator calc);
 
   /// binary operation on all elements (invents an element if none is present)
-  template <class binary_op_t> void binary(const oper &n, binary_op_t binop);
+  template <class binary_op_t>
+  void binary(const oper &n, binary_op_t binop);
 
   /// evaluates and unpacks n[argpos] to a fundamental value_base
   template <class value_t>
-  value_t unpack_optional_arg(const oper &n, int argpos, const value_t &defaultVal);
+  value_t unpack_optional_arg(const oper &n, int argpos,
+                              const value_t &defaultVal);
 
   /// auxiliary missing method
   std::size_t missing_aux(array &elems);
 
-  template <class ValueNode> void _value(const ValueNode &val) {
+  template <class ValueNode>
+  void _value(const ValueNode &val) {
     calcres = to_expr(val.value());
   }
 };
-
 
 struct sequence_function {
   sequence_function(const expr &e, std::ostream &logstream)
       : exp(e), logger(logstream) {}
 
   any_expr operator()(any_expr &&elem) const {
-    any_expr *elptr = &elem; // workaround, b/c unique_ptr cannot be captured
+    any_expr *elptr = &elem;  // workaround, b/c unique_ptr cannot be captured
 
     evaluator sub{[elptr](const json::value &keyval, int) -> any_expr {
                     if (const json::string *pkey = keyval.if_string()) {
                       const json::string &key = *pkey;
 
-                      if (key.size() == 0)
-                        return clone_expr(*elptr);
+                      if (key.size() == 0) return clone_expr(*elptr);
 
                       try {
                         object_value &o = down_cast<object_value>(**elptr);
@@ -2269,7 +2292,7 @@ struct sequence_function {
     return sub.eval(exp);
   }
 
-private:
+ private:
   const expr &exp;
   std::ostream &logger;
 };
@@ -2307,26 +2330,24 @@ struct sequence_reduction {
   sequence_reduction(expr &e, std::ostream &logstream)
       : exp(e), logger(logstream) {}
 
-  // for compatibility reasons, the first argument is passed membership as
+  // for compatibility reasons, the first argument is passed in as
   // templated && ref.
-  //   g++ -std=c++17 passes membership a & ref, while g++ -std=c++20 passes
-  //   membership a &&.
+  //   g++ -std=c++17 passes in a & ref, while g++ -std=c++20 passes
+  //   in a &&.
   // the templated && together with reference collapsing make the code portable
   // across standard versions.
   // \note const ValueExprT& would also work, but currently the
-  //       visitor calls membership clone_expr require a non-const reference.
+  //       visitor calls in clone_expr require a non-const reference.
   template <class ValueExprT>
   any_expr operator()(ValueExprT &&accu, any_expr elem) const {
-    any_expr *acptr = &accu; // workaround, b/c unique_ptr cannot be captured
-    any_expr *elptr = &elem; // workaround, b/c unique_ptr cannot be captured
+    any_expr *acptr = &accu;  // workaround, b/c unique_ptr cannot be captured
+    any_expr *elptr = &elem;  // workaround, b/c unique_ptr cannot be captured
 
     evaluator sub{[acptr, elptr](const json::value &keyval, int) -> any_expr {
                     if (const json::string *pkey = keyval.if_string()) {
-                      if (*pkey == "current")
-                        return clone_expr(*elptr);
+                      if (*pkey == "current") return clone_expr(*elptr);
 
-                      if (*pkey == "accumulator")
-                        return clone_expr(*acptr);
+                      if (*pkey == "accumulator") return clone_expr(*acptr);
                     }
 
                     return to_expr(nullptr);
@@ -2336,7 +2357,7 @@ struct sequence_reduction {
     return sub.eval(exp);
   }
 
-private:
+ private:
   expr &exp;
   std::ostream &logger;
 };
@@ -2404,7 +2425,8 @@ void evaluator::reduce_sequence(const oper &n, binary_op_t op) {
 }
 
 template <class binary_predicate_t>
-void evaluator::eval_pair_short_circuit(const oper &n, binary_predicate_t pred) {
+void evaluator::eval_pair_short_circuit(const oper &n,
+                                        binary_predicate_t pred) {
   const int num = n.num_evaluated_operands();
   assert(num >= 2);
 
@@ -2504,9 +2526,13 @@ void evaluator::visit(const logical_not_not &n) {
   unary(n, operator_impl<logical_not_not>{});
 }
 
-void evaluator::visit(const add &n) { reduce_sequence(n, operator_impl<add>{}); }
+void evaluator::visit(const add &n) {
+  reduce_sequence(n, operator_impl<add>{});
+}
 
-void evaluator::visit(const subtract &n) { binary(n, operator_impl<subtract>{}); }
+void evaluator::visit(const subtract &n) {
+  binary(n, operator_impl<subtract>{});
+}
 
 void evaluator::visit(const multiply &n) {
   reduce_sequence(n, operator_impl<multiply>{});
@@ -2516,11 +2542,17 @@ void evaluator::visit(const divide &n) { binary(n, operator_impl<divide>{}); }
 
 void evaluator::visit(const modulo &n) { binary(n, operator_impl<modulo>{}); }
 
-void evaluator::visit(const min &n) { reduce_sequence(n, operator_impl<min>{}); }
+void evaluator::visit(const min &n) {
+  reduce_sequence(n, operator_impl<min>{});
+}
 
-void evaluator::visit(const max &n) { reduce_sequence(n, operator_impl<max>{}); }
+void evaluator::visit(const max &n) {
+  reduce_sequence(n, operator_impl<max>{});
+}
 
-void evaluator::visit(const cat &n) { reduce_sequence(n, operator_impl<cat>{}); }
+void evaluator::visit(const cat &n) {
+  reduce_sequence(n, operator_impl<cat>{});
+}
 
 #if WITH_JSON_LOGIC_CPP_EXTENSIONS
 void evaluator::visit(const regex_match &n) {
@@ -2528,38 +2560,34 @@ void evaluator::visit(const regex_match &n) {
 }
 #endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
 
-void evaluator::visit(const membership &n)
-{
+void evaluator::visit(const membership &n) {
   assert(n.num_evaluated_operands() >= 1);
 
+  // lhs in rhs - rhs is a possibly large set.
   any_expr lhs = eval(n.operand(0));
   any_expr rhs = eval(n.operand(1));
 
-  auto array_op =
-          [&lhs](array &arrop) -> any_expr
-          {
-            auto beg = arrop.begin();
-            auto lim = arrop.end();
-            auto isEqual =
-                   [&lhs](any_expr& rhs) -> bool
-                   {
-                     return compute(lhs, rhs, operator_impl<strict_equal>{});
-                   };
+  // std::cout << "in membership: lhs = " << lhs << ", rhs = " << rhs <<
+  // std::endl;
 
-            return to_expr(std::find_if(beg, lim, isEqual) != lim);
-          };
+  auto array_op = [&lhs](array &arrop) -> any_expr {
+    auto beg = arrop.begin();
+    auto lim = arrop.end();
+    auto isEqual = [&lhs](any_expr &rhs) -> bool {
+      return compute(lhs, rhs, operator_impl<strict_equal>{});
+    };
 
-  auto string_op =
-          [&lhs,&rhs]() -> any_expr
-          {
-            try
-            {
-              return compute(lhs, rhs, operator_impl<membership>{});
-            }
-            catch (const type_error&) {}
+    return to_expr(std::find_if(beg, lim, isEqual) != lim);
+  };
 
-            return to_expr(false);
-          };
+  auto string_op = [&lhs, &rhs]() -> any_expr {
+    try {
+      return compute(lhs, rhs, operator_impl<membership>{});
+    } catch (const type_error &) {
+    }
+
+    return to_expr(false);
+  };
 
   calcres = with_type<array>(rhs.get(), array_op, string_op);
 }
@@ -2590,8 +2618,7 @@ void evaluator::visit(const array &n) {
 
   // \todo consider making arrays lazy
   std::transform(
-      n.begin(), n.end(),
-      std::back_inserter(elems),
+      n.begin(), n.end(), std::back_inserter(elems),
       [self](const any_expr &exp) -> any_expr { return self->eval(*exp); });
 
   array &res = deref(new array);
@@ -2601,7 +2628,9 @@ void evaluator::visit(const array &n) {
   calcres = any_expr(&res);
 }
 
-void evaluator::visit(const merge &n) { reduce_sequence(n, operator_impl<merge>{}); }
+void evaluator::visit(const merge &n) {
+  reduce_sequence(n, operator_impl<merge>{});
+}
 
 void evaluator::visit(const reduce &n) {
   any_expr arr = eval(n.operand(0));
@@ -2666,7 +2695,7 @@ void evaluator::visit(const filter &n) {
 
 void evaluator::visit(const all &n) {
   any_expr arr = eval(n.operand(0));
-  array &elems = down_cast<array>(*arr); // evaluated elements
+  array &elems = down_cast<array>(*arr);  // evaluated elements
   expr &expr = n.operand(1);
   const bool res = std::all_of(std::make_move_iterator(elems.begin()),
                                std::make_move_iterator(elems.end()),
@@ -2677,7 +2706,7 @@ void evaluator::visit(const all &n) {
 
 void evaluator::visit(const none &n) {
   any_expr arr = eval(n.operand(0));
-  array &elems = down_cast<array>(*arr); // evaluated elements
+  array &elems = down_cast<array>(*arr);  // evaluated elements
   expr &expr = n.operand(1);
   const bool res = std::none_of(std::make_move_iterator(elems.begin()),
                                 std::make_move_iterator(elems.end()),
@@ -2688,7 +2717,7 @@ void evaluator::visit(const none &n) {
 
 void evaluator::visit(const some &n) {
   any_expr arr = eval(n.operand(0));
-  array &elems = down_cast<array>(*arr); // evaluated elements
+  array &elems = down_cast<array>(*arr);  // evaluated elements
   expr &expr = n.operand(1);
   const bool res = std::any_of(std::make_move_iterator(elems.begin()),
                                std::make_move_iterator(elems.end()),
@@ -2707,7 +2736,7 @@ void evaluator::visit(const var &n) {
 
   try {
     calcres = vars(val.to_json(), n.num());
-  } catch (const variable_resolution_error&) {
+  } catch (const variable_resolution_error &) {
     calcres = (n.num_evaluated_operands() > 1) ? eval(n.operand(1))
                                                : to_expr(nullptr);
   }
@@ -2716,13 +2745,13 @@ void evaluator::visit(const var &n) {
 std::size_t evaluator::missing_aux(array &elems) {
   auto avail = [calc = this](const any_expr &v) -> bool {
     try {
-      const value_base& val = down_cast<value_base>(*v);
-      any_expr          res = calc->vars(val.to_json(), COMPUTED_VARIABLE_NAME);
+      const value_base &val = down_cast<value_base>(*v);
+      any_expr res = calc->vars(val.to_json(), COMPUTED_VARIABLE_NAME);
 
       // value-missing := res == 0 || *res is a null_value
       // return !value-missing
       return res && (may_down_cast<null_value>(*res) == nullptr);
-    } catch (const jsonlogic::variable_resolution_error&) {
+    } catch (const jsonlogic::variable_resolution_error &) {
       return false;
     }
   };
@@ -2744,19 +2773,16 @@ void evaluator::visit(const missing &n) {
     res.operands().emplace_back(std::move(arg));
     arg.reset(&res);
 
-    std::transform( std::next(n.begin()), n.end(),
-                    std::back_inserter(res.operands()),
-                    [&calc](const any_expr& e) -> any_expr
-                    {
-                      return calc->eval(*e);
-                    }
-                  );
+    std::transform(
+        std::next(n.begin()), n.end(), std::back_inserter(res.operands()),
+        [&calc](const any_expr &e) -> any_expr { return calc->eval(*e); });
 
     return res;
   };
 
   array &elems = with_type<array>(
-      arg.get(), [](array &arr) -> array & { return arr; }, // ignore other args
+      arg.get(),
+      [](array &arr) -> array & { return arr; },  // ignore other args
       non_array_alt);
 
   missing_aux(elems);
@@ -2766,11 +2792,10 @@ void evaluator::visit(const missing &n) {
 void evaluator::visit(const missing_some &n) {
   const std::uint64_t minreq = unpack_value<std::uint64_t>(eval(n.operand(0)));
   any_expr arr = eval(n.operand(1));
-  array &elems = down_cast<array>(*arr); // evaluated elements
+  array &elems = down_cast<array>(*arr);  // evaluated elements
   std::size_t avail = missing_aux(elems);
 
-  if (avail >= minreq)
-    elems.operands().clear();
+  if (avail >= minreq) elems.operands().clear();
 
   calcres = std::move(arr);
 }
@@ -2829,11 +2854,12 @@ any_expr eval_path(const json::string &path, const json::object *obj) {
   throw variable_resolution_error{"in logic.cc::eval_path."};
 }
 
-template <class IntT> any_expr eval_index(IntT idx, const json::array &arr) {
+template <class IntT>
+any_expr eval_index(IntT idx, const json::array &arr) {
   return jsonlogic::to_expr(arr[idx]);
 }
 
-} // namespace
+}  // namespace
 
 any_expr apply(expr &exp, const variable_accessor &vars) {
   evaluator ev{vars, std::cerr};
@@ -2877,9 +2903,8 @@ any_expr apply(json::value rule, json::value data) {
 }
 
 variable_accessor data_accessor(std::vector<value_variant> vars) {
-  return [vars = std::move(vars)](const json::value&, int idx) -> any_expr {
-    if ((idx >= 0) && (std::size_t(idx) < vars.size()))
-    {
+  return [vars = std::move(vars)](const json::value &, int idx) -> any_expr {
+    if ((idx >= 0) && (std::size_t(idx) < vars.size())) {
       CXX_LIKELY;
       return to_expr(vars[idx]);
     }
@@ -2919,11 +2944,11 @@ struct value_printer : forwarding_visitor {
     os << "]";
   }
 
-private:
+ private:
   std::ostream &os;
 };
 
-} // namespace
+}  // namespace
 
 std::ostream &operator<<(std::ostream &os, any_expr &n) {
   value_printer prn{os};
@@ -2934,35 +2959,30 @@ std::ostream &operator<<(std::ostream &os, any_expr &n) {
 
 expr &oper::operand(int n) const { return deref(this->at(n).get()); }
 
-
 //
 // json_logic_rule
 
-any_expr const &
-logic_rule::syntax_tree() const { return std::get<0>(*this); }
+any_expr const &logic_rule::syntax_tree() const { return std::get<0>(*this); }
 
-std::vector<boost::json::string> const &
-logic_rule::variable_names() const { return std::get<1>(*this); }
-
-bool
-logic_rule::has_computed_variable_names() const { return std::get<2>(*this); }
-
-any_expr
-logic_rule::apply() const { return jsonlogic::apply( syntax_tree() ); }
-
-any_expr
-logic_rule::apply(const variable_accessor &var_accessor) const
-{
-  return jsonlogic::apply( syntax_tree(), var_accessor );
+std::vector<boost::json::string> const &logic_rule::variable_names() const {
+  return std::get<1>(*this);
 }
 
-any_expr
-logic_rule::apply(std::vector<value_variant> vars) const
-{
-  return jsonlogic::apply( syntax_tree(), std::move(vars) );
+bool logic_rule::has_computed_variable_names() const {
+  return std::get<2>(*this);
 }
 
-} // namespace jsonlogic
+any_expr logic_rule::apply() const { return jsonlogic::apply(syntax_tree()); }
+
+any_expr logic_rule::apply(const variable_accessor &var_accessor) const {
+  return jsonlogic::apply(syntax_tree(), var_accessor);
+}
+
+any_expr logic_rule::apply(std::vector<value_variant> vars) const {
+  return jsonlogic::apply(syntax_tree(), std::move(vars));
+}
+
+}  // namespace jsonlogic
 
 #if UNSUPPORTED_SUPPLEMENTAL
 
@@ -3044,15 +3064,19 @@ struct SAttributeTraversal : visitor {
 
   void visit(error &n) final;
 
-private:
+ private:
   visitor &sub;
 
-  template <class OperatorNode> inline void _visit(OperatorNode &n) {
+  template <class OperatorNode>
+  inline void _visit(OperatorNode &n) {
     traverseChildren(*this, n);
     sub.visit(n);
   }
 
-  template <class ValueNode> inline void _value(ValueNode &n) { sub.visit(n); }
+  template <class ValueNode>
+  inline void _value(ValueNode &n) {
+    sub.visit(n);
+  }
 };
 
 void SAttributeTraversal::visit(expr &) { throw_type_error(); }
@@ -3106,9 +3130,9 @@ void SAttributeTraversal::visit(real_value &n) { _value(n); }
 void SAttributeTraversal::visit(string_value &n) { _value(n); }
 
 void SAttributeTraversal::visit(error &n) { sub.visit(n); }
-} // namespace
+}  // namespace
 
-/// AST traversal function that calls v's visit methods membership post-fix
+/// AST traversal function that calls v's visit methods in post-fix
 /// order
 void traverseInSAttributeOrder(expr &e, visitor &vis);
 
