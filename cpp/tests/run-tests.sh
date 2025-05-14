@@ -4,12 +4,14 @@ JSONDIR="${1}"
 
 function run {
   for tst in ${JSONDIR}/*.json; do
-    echo "testing ${TESTBIN} <$tst"
+    echo -n "testing $(basename $tst)... "
     ${TESTBIN} <$tst
     res=$?
     if [[ $res -ne 0 ]] ; then
-      echo "$res"
+      echo "error code $res"
       exit 1
+    else
+      echo "OK"
     fi
   done
 }
