@@ -17,6 +17,8 @@ include(GNUInstallDirs)
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
 
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG=1")
+set(CMAKE_CXX_FLAGS_DEBUG "-O0 -ggdb -march=native")
 
 # Download and build Boost::json
 set(BOOST_URL 
