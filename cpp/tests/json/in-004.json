@@ -1,1 +1,1 @@
-{"rule":{"in":[[-1,0,1],{"var":"x"}]}, "data":{"x": 1},"expected":false}
+{"rule":{"in":[[-1,0,1],{"var":"x"}]}, "data":{"x": 1},"expected":false, "description": "in operator with a static array as a needle and variable integer as a haystack"}
