@@ -1,0 +1,1 @@
+{"rule":{"in":[{"var": "needle"},{"var":"haystack"}]}, "data":{"needle": 2, "haystack": [1,3,5,7]},"expected":false, "description": "in operator with a variable needle not in a variable haystack"}

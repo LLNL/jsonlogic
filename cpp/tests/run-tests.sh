@@ -23,5 +23,5 @@ run
 TESTBIN="../build/tests/testeval -s"
 run
 
-echo "qed."
+echo "All tests passed."
 

@@ -1,1 +1,1 @@
-{"rule":{"in":["Ringo",["John","Paul","George","Ringo"]]},"expected":true}
+{"rule":{"in":["Ringo",["John","Paul","George","Ringo"]]},"expected":true, "description": "in operator with a string needle in a static haystack"}

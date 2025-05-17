@@ -1,1 +1,1 @@
-{"rule":{"in":["Spring","Springfield"]},"data":{},"expected":true}
+{"rule":{"in":["Spring","Springfield"]},"data":{},"expected":true, "description": "in operator with two strings"}
