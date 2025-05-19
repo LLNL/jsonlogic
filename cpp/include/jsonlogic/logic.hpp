@@ -10,7 +10,7 @@ namespace jsonlogic {
 //
 // exception classes
 
-/// thrown when no type conversion rules are able to satisy an operation's type requirements
+/// thrown when no type conversion rules are able to satisfy an operation's type requirements
 struct type_error : std::runtime_error {
   using base = std::runtime_error;
   using base::base;
@@ -39,13 +39,23 @@ logic_rule_base create_logic(boost::json::value n);
 // API to evaluate/apply an expression
 
 /// a type representing views on value types in jsonlogic
-// \todo consider adding std::unique_ptr<boost::json::value> as fallback type.
-using value_variant = std::variant< std::monostate, // or std::nullptr_t ?
+/// \details
+///    (1) the variant contains options for all primitive types.
+///    (2) some rules treat the absence of a value differently from a null value
+///    (3) boost::json::value is a fallback type that is used if one of
+///        the following conditions is true:
+///        - represent a value with compound type such as an array or object
+///        - represent a string value for which it cannot be guaranteed that the
+///          original string outlives the string_view
+///        \todo consider using an any_expr as fallback type
+using value_variant = std::variant< std::monostate,
+                                    std::nullptr_t,
                                     bool,
                                     std::int64_t,
                                     std::uint64_t,
                                     double,
-                                    std::string_view
+                                    std::string_view,
+                                    boost::json::value // fallback type
                                   >;
 
 

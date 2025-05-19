@@ -298,15 +298,19 @@ struct real_value : value_generic<double> {
   void accept(visitor &) const final;
 };
 
-struct string_value : value_generic<boost::json::string> {
-  using base = value_generic<boost::json::string>;
+using string_value_base = value_generic<std::string_view>;
+
+struct string_value : string_value_base {
+  using base = string_value_base;
   using base::base;
 
   void accept(visitor &) const final;
 };
 
-struct object_value : expr, private std::map<boost::json::string, any_expr> {
-  using base = std::map<boost::json::string, any_expr>;
+using object_value_data = std::map<std::string_view, any_expr>;
+
+struct object_value : expr, private object_value_data {
+  using base = object_value_data;
   using base::base;
 
   ~object_value() = default;

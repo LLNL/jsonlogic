@@ -10,6 +10,7 @@
 #include <numeric>
 #include <string>
 #include <unordered_map>
+#include <charconv>
 
 #if WITH_JSON_LOGIC_CPP_EXTENSIONS
 #include <regex>
@@ -568,52 +569,73 @@ any_expr to_expr(const json::value &n) {
 
 any_expr to_expr(value_variant val) {
   // guard against accidental variant modification
-  //   value_variant = variant<monostate, bool, int64_t, uint64_t, double,
-  //   string_view>
-  static_assert(std::variant_size_v<value_variant> == 6);
+  enum { mono_variant = 0,
+         null_variant = 1,
+         bool_variant = 2,
+         int_variant  = 3,
+         uint_variant = 4,
+         real_variant = 5,
+         strv_variant = 6,
+         json_variant = 7
+       };
+
+  static_assert(std::variant_size_v<value_variant> == 8);
   static_assert(std::is_same_v<std::monostate,
-                               std::variant_alternative_t<0, value_variant> >);
-  static_assert(
-      std::is_same_v<bool, std::variant_alternative_t<1, value_variant> >);
+                               std::variant_alternative_t<mono_variant, value_variant> >);
+  static_assert(std::is_same_v<std::nullptr_t,
+                               std::variant_alternative_t<null_variant, value_variant> >);
+  static_assert(std::is_same_v<bool,
+                               std::variant_alternative_t<bool_variant, value_variant> >);
   static_assert(std::is_same_v<std::int64_t,
-                               std::variant_alternative_t<2, value_variant> >);
+                               std::variant_alternative_t<int_variant, value_variant> >);
   static_assert(std::is_same_v<std::uint64_t,
-                               std::variant_alternative_t<3, value_variant> >);
-  static_assert(
-      std::is_same_v<double, std::variant_alternative_t<4, value_variant> >);
+                               std::variant_alternative_t<uint_variant, value_variant> >);
+  static_assert(std::is_same_v<double,
+                               std::variant_alternative_t<real_variant, value_variant> >);
   static_assert(std::is_same_v<std::string_view,
-                               std::variant_alternative_t<5, value_variant> >);
+                               std::variant_alternative_t<strv_variant, value_variant> >);
+  static_assert(std::is_same_v<boost::json::value,
+                               std::variant_alternative_t<json_variant, value_variant> >);
 
   any_expr res;
 
   switch (val.index()) {
-    case 0: {
+    case mono_variant: {
+      throw variable_resolution_error{"in logic.c::to_expr(value_variant)"};
+    }
+
+    case null_variant: {
       res = to_expr(nullptr);
       break;
     }
 
-    case 1: {
+    case bool_variant: {
       res = to_expr(std::get<bool>(val));
       break;
     }
 
-    case 2: {
+    case int_variant: {
       res = to_expr(std::get<std::int64_t>(val));
       break;
     }
 
-    case 3: {
+    case uint_variant: {
       res = to_expr(std::get<std::uint64_t>(val));
       break;
     }
 
-    case 4: {
+    case real_variant: {
       res = to_expr(std::get<double>(val));
       break;
     }
 
-    case 5: {
+    case strv_variant: {
       res = to_expr(boost::json::string(std::get<std::string_view>(val)));
+      break;
+    }
+
+    case json_variant: {
+      res = to_expr(std::get<boost::json::value>(val));
       break;
     }
 
@@ -636,13 +658,26 @@ struct not_int64_error : internal_coercion_error {};
 struct not_uint64_error : internal_coercion_error {};
 struct unpacked_array_req : internal_coercion_error {};
 
+
+template <class T>
+T from_string(std::string_view str, T el) {
+  auto [ptr, err] = std::from_chars(str.data(), str.data() + str.size(), el);
+
+  if (err != std::errc{}) {
+    CXX_UNLIKELY;
+    throw std::runtime_error{"logic.cc: in to_concrete(string_view, int64_t)"};
+  }
+
+  return el;
+}
+
 /// conversion to int64
 /// \{
 inline std::int64_t to_concrete(std::int64_t v, const std::int64_t &) {
   return v;
 }
-inline std::int64_t to_concrete(const json::string &str, const std::int64_t &) {
-  return std::stoll(std::string{str.c_str()});
+inline std::int64_t to_concrete(std::string_view str, const std::int64_t &el) {
+  return from_string(str, el);
 }
 inline std::int64_t to_concrete(double v, const std::int64_t &) { return v; }
 inline std::int64_t to_concrete(bool v, const std::int64_t &) { return v; }
@@ -665,9 +700,8 @@ inline std::int64_t to_concrete(std::uint64_t v, const std::int64_t &) {
 inline std::uint64_t to_concrete(std::uint64_t v, const std::uint64_t &) {
   return v;
 }
-inline std::uint64_t to_concrete(const json::string &str,
-                                 const std::uint64_t &) {
-  return std::stoull(std::string{str.c_str()});
+inline std::uint64_t to_concrete(std::string_view str, const std::uint64_t &el) {
+  return from_string(str, el);
 }
 inline std::uint64_t to_concrete(double v, const std::uint64_t &) { return v; }
 inline std::uint64_t to_concrete(bool v, const std::uint64_t &) { return v; }
@@ -687,8 +721,8 @@ inline std::uint64_t to_concrete(std::int64_t v, const std::uint64_t &) {
 
 /// conversion to double
 /// \{
-inline double to_concrete(const json::string &str, const double &) {
-  return std::stod(std::string{str.c_str()});
+inline double to_concrete(std::string_view str, const double &el) {
+  return from_string(str, el);
 }
 inline double to_concrete(std::int64_t v, const double &) { return v; }
 inline double to_concrete(std::uint64_t v, const double &) { return v; }
@@ -851,7 +885,7 @@ struct numeric_binary_operator_base {
 struct relational_operator_base : numeric_binary_operator_base {
   using numeric_binary_operator_base::coerce;
 
-  std::tuple<double, double> coerce(const double *lv, const json::string *rv) {
+  std::tuple<double, double> coerce(const double *lv, const std::string_view* rv) {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
@@ -860,7 +894,7 @@ struct relational_operator_base : numeric_binary_operator_base {
   }
 
   std::tuple<std::int64_t, std::int64_t> coerce(const std::int64_t *lv,
-                                                const json::string *rv) {
+                                                const std::string_view* rv) {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
@@ -870,7 +904,7 @@ struct relational_operator_base : numeric_binary_operator_base {
   }
 
   std::tuple<std::uint64_t, std::uint64_t> coerce(const std::uint64_t *lv,
-                                                  const json::string *rv) {
+                                                  const std::string_view* rv) {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
@@ -879,7 +913,7 @@ struct relational_operator_base : numeric_binary_operator_base {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
-  std::tuple<double, double> coerce(const json::string *lv, const double *rv) {
+  std::tuple<double, double> coerce(const std::string_view* lv, const double *rv) {
     return {to_concrete(*lv, *rv), *rv};
   }
 
@@ -887,7 +921,7 @@ struct relational_operator_base : numeric_binary_operator_base {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<std::int64_t, std::int64_t> coerce(const json::string *lv,
+  std::tuple<std::int64_t, std::int64_t> coerce(const std::string_view* lv,
                                                 const std::int64_t *rv) {
     return {to_concrete(*lv, *rv), *rv};
   }
@@ -897,7 +931,7 @@ struct relational_operator_base : numeric_binary_operator_base {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<std::uint64_t, std::uint64_t> coerce(const json::string *lv,
+  std::tuple<std::uint64_t, std::uint64_t> coerce(std::string_view* lv,
                                                   const std::uint64_t *rv) {
     return {to_concrete(*lv, *rv), *rv};
   }
