@@ -82,12 +82,15 @@ int main(int argc, const char **argv) {
   std::cout << "initialized data_obj\n";
   //   data_obj["haystack"] = haystack;
   size_t matches = 0;
+  jsonlogic::any_expr rule;
+  std::tie(rule, std::ignore, std::ignore) = jsonlogic::create_logic(jv_in);
+
   auto jl_lambda = [&] {
     matches = 0;
     for (size_t i = 0; i < N; ++i) {
       data_obj["x"] = xs[i];
-      auto data = boost::json::value_from(data_obj);
-      auto v_in = jsonlogic::apply(jv_in, data);
+      auto varaccess = jsonlogic::data_accessor(boost::json::value_from(data_obj));
+      auto v_in = jsonlogic::apply(rule, varaccess);
 
       bool val = jsonlogic::truthy(v_in);
 

@@ -21,15 +21,15 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG=1")
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -ggdb -march=native")
 
 # Download and build Boost::json
-set(BOOST_URL 
-    "https://github.com/boostorg/boost/releases/download/boost-1.87.0/boost-1.87.0-cmake.tar.gz" 
+set(BOOST_URL
+    "https://github.com/boostorg/boost/releases/download/boost-1.87.0/boost-1.87.0-cmake.tar.gz"
     CACHE STRING "URL to fetch Boost tarball")
 
 
 set(BOOST_INCLUDE_LIBRARIES json lexical_cast range)
 set(BUILD_SHARED_LIBS ON)
 FetchContent_Declare(
-    Boost 
+    Boost
     URL ${BOOST_URL})
 FetchContent_MakeAvailable(Boost)
 
