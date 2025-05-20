@@ -11,6 +11,8 @@ FetchContent_Declare(faker
 FetchContent_MakeAvailable(faker)
 
 add_executable(jsonlogic_benchmark src/benchmark1.cpp)
+add_compile_options(-Wall -Wextra -Wunused-variable)
+
 target_compile_options(jsonlogic_benchmark PRIVATE -O3)
 target_include_directories(jsonlogic_benchmark PRIVATE
     ${CMAKE_SOURCE_DIR}/bench/include
