@@ -1,7 +1,7 @@
 #include <faker-cxx/faker.h>
 
 #include <dlfcn.h>
-
+#include <cstdio>
 #include <bench.hpp>
 #include <boost/json.hpp>
 #include <boost/json/src.hpp>
@@ -46,8 +46,11 @@ private:
 
 dynamic_lib compile_and_load(const std::string &code,
                              const std::string &libname) {
-  // Step 1: Write code to a temporary file
-  const std::string tempSourceFile = "/tmp/temp_code.cpp";
+  // Step 1: Write code to a temporary file.
+  // There is still a very minor risk of a race condition here, but
+  // it would require guessing the name of the file and creating it
+  // before the ofstream sourceFile statement a few lines down.
+  const std::string tempSourceFile = std::tmpnam(nullptr) + std::string{".cpp"};
 
   std::ofstream sourceFile{tempSourceFile};
   if (!sourceFile)
@@ -242,6 +245,6 @@ int main(int argc, const char **argv) {
 
   jl2_results.compare_to(jl_results);
   cpp2_results.compare_to(jl2_results);
-  cpp_results.compare_to(cpp2_results);
+  cpp2_results.compare_to(cpp_results);
   return 0;
 }
