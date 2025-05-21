@@ -6,9 +6,10 @@
 #include <iostream>
 #include <jsonlogic/logic.hpp>
 #include <set>
+#include <vector>
 
 const int SEED_ = 42;
-static const int HAYSTACK_RANGE_ = 1 << 18;
+static const size_t HAYSTACK_RANGE_ = 1 << 18;
 static const size_t HAYSTACK_SZ_ = 100000;
 static const size_t N_ = 100000;
 static const int N_RUNS_ = 10;
@@ -22,17 +23,17 @@ int main(int argc, const char **argv) {
     N_RUNS = std::stoul(argv[2]);
   }
 
-  int SEED = SEED_;
+  size_t SEED = SEED_;
   if (argc > 3) {
     SEED = std::stoul(argv[3]);
   }
 
-  int HAYSTACK_SZ = HAYSTACK_SZ_;
+  size_t HAYSTACK_SZ = HAYSTACK_SZ_;
   if (argc > 4) {
     HAYSTACK_SZ = std::stoul(argv[4]);
   }
 
-  int HAYSTACK_RANGE = HAYSTACK_RANGE_;
+  size_t HAYSTACK_RANGE = HAYSTACK_RANGE_;
   if (argc > 5) {
     HAYSTACK_RANGE = std::stoul(argv[5]);
   }
@@ -58,7 +59,7 @@ int main(int argc, const char **argv) {
   uint64_t val;
   // create haystack
   while (haystack_set.size() <= HAYSTACK_SZ) {
-    val = faker::number::integer(0, HAYSTACK_RANGE);
+    val = faker::number::integer<uint64_t>(0, HAYSTACK_RANGE);
     if (!haystack_set.contains(val)) {
       haystack_set.insert(val);
       haystack.push_back(val);
@@ -68,7 +69,7 @@ int main(int argc, const char **argv) {
   std::cout << "initialized haystack\n";
   // Create data
   for (size_t i = 0; i < N; ++i) {
-    xs.push_back(faker::number::integer(0, HAYSTACK_RANGE));
+    xs.push_back(faker::number::integer<uint64_t>(0, HAYSTACK_RANGE));
   }
 
   std::cout << "initialized xs\n";
@@ -82,12 +83,16 @@ int main(int argc, const char **argv) {
   std::cout << "initialized data_obj\n";
   //   data_obj["haystack"] = haystack;
   size_t matches = 0;
+  jsonlogic::any_expr rule;
+  std::tie(rule, std::ignore, std::ignore) = jsonlogic::create_logic(jv_in);
+
   auto jl_lambda = [&] {
     matches = 0;
     for (size_t i = 0; i < N; ++i) {
       data_obj["x"] = xs[i];
-      auto data = boost::json::value_from(data_obj);
-      auto v_in = jsonlogic::apply(jv_in, data);
+      auto varaccess =
+          jsonlogic::data_accessor(boost::json::value_from(data_obj));
+      auto v_in = jsonlogic::apply(rule, varaccess);
 
       bool val = jsonlogic::truthy(v_in);
 

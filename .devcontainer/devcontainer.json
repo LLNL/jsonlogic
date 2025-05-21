@@ -5,7 +5,11 @@
 	"build": {
 		"dockerfile": "Dockerfile"
 	},
-	"workspaceFolder": "/workspaces/jsonlogic/cpp"
+	"workspaceFolder": "/workspaces/jsonlogic/cpp",
+	"mounts": [
+    	"source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached"
+	],
+ 	"postStartCommand": "chmod 700 ~/.ssh && chmod 600 ~/.ssh/*"
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
