@@ -6,11 +6,10 @@
 #include <iostream>
 #include <jsonlogic/logic.hpp>
 
-const int SEED_ = 42;
+const size_t SEED_ = 42;
 static const size_t N_ = 100000;
 static const int N_RUNS_ = 10;
 int main(int argc, const char **argv) {
-  
   size_t N = N_;
   if (argc > 1) {
     N = std::stoul(argv[1]);
@@ -20,7 +19,7 @@ int main(int argc, const char **argv) {
     N_RUNS = std::stoul(argv[2]);
   }
 
-  int SEED = SEED_;
+  size_t SEED = SEED_;
   if (argc > 3) {
     SEED = std::stoul(argv[3]);
   }
@@ -33,8 +32,8 @@ int main(int argc, const char **argv) {
 
   // Create data
   for (size_t i = 0; i < N; ++i) {
-    xs.push_back(faker::number::integer(0, 255));
-    ys.push_back(faker::number::integer(0, 255));
+    xs.push_back(faker::number::integer<uint64_t>(0, 255));
+    ys.push_back(faker::number::integer<uint64_t>(0, 255));
   }
 
   // Create jsonlogic benchmark

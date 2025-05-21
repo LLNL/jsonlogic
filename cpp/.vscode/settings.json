@@ -1,0 +1,11 @@
+{
+    "C_Cpp.files.exclude": {
+        "**/.vscode": true,
+        "**/.vs": true,
+        "**/_deps/**": true
+    },
+    "cmake.generator": "Unix Makefiles",
+    "clangd.arguments": [
+    "--compile-commands-dir=/workspaces/jsonlogic/cpp/build"
+  ]
+}
