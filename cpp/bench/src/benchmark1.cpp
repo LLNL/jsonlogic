@@ -5,133 +5,113 @@
 #include <bench.hpp>
 #include <boost/json.hpp>
 #include <boost/json/src.hpp>
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <jsonlogic/logic.hpp>
 
-namespace experimental
-{
+namespace experimental {
 
-struct dynamic_lib
-{
-    explicit
-    dynamic_lib(const char* dllname)
-    : handle(dlopen(dllname, RTLD_LAZY))
-    {
-      if (!handle)
-        throw std::runtime_error{std::string{"Unable to load shared object: "} + dlerror()};
-    }
+struct dynamic_lib {
+  explicit dynamic_lib(const char *dllname)
+      : handle(dlopen(dllname, RTLD_LAZY)) {
+    if (!handle)
+      throw std::runtime_error{std::string{"Unable to load shared object: "} +
+                               dlerror()};
+  }
 
-    ~dynamic_lib() { if (handle) dlclose(handle); }
+  ~dynamic_lib() {
+    if (handle)
+      dlclose(handle);
+  }
 
-    dynamic_lib(dynamic_lib&& other)
-    {
-      std::swap(this->handle, other.handle);
-    }
+  dynamic_lib(dynamic_lib &&other) { std::swap(this->handle, other.handle); }
 
-    dynamic_lib& operator=(dynamic_lib&& other)
-    {
-      std::swap(this->handle, other.handle);
-      return *this;
-    }
+  dynamic_lib &operator=(dynamic_lib &&other) {
+    std::swap(this->handle, other.handle);
+    return *this;
+  }
 
-    template <class FnType>
-    FnType
-    function(const char* name) const { return reinterpret_cast<FnType>(dlsym(handle, name)); }
+  template <class FnType> FnType function(const char *name) const {
+    return reinterpret_cast<FnType>(dlsym(handle, name));
+  }
 
-  private:
-    void* handle = nullptr;
+private:
+  void *handle = nullptr;
 
-    dynamic_lib()                              = delete;
-    dynamic_lib(const dynamic_lib&)            = delete;
-    dynamic_lib& operator=(const dynamic_lib&) = delete;
+  dynamic_lib() = delete;
+  dynamic_lib(const dynamic_lib &) = delete;
+  dynamic_lib &operator=(const dynamic_lib &) = delete;
 };
 
-dynamic_lib
-compile_and_load(const std::string& code, const std::string& libname)
-{
-    // Step 1: Write code to a temporary file
-    const std::string tempSourceFile = "/tmp/temp_code.cpp";
+dynamic_lib compile_and_load(const std::string &code,
+                             const std::string &libname) {
+  // Step 1: Write code to a temporary file
+  const std::string tempSourceFile = "/tmp/temp_code.cpp";
 
-    std::ofstream sourceFile{tempSourceFile};
-    if (!sourceFile)
-        throw std::runtime_error{"Unable to create temporary source file."};
+  std::ofstream sourceFile{tempSourceFile};
+  if (!sourceFile)
+    throw std::runtime_error{"Unable to create temporary source file."};
 
-    sourceFile << code;
-    sourceFile.close();
+  sourceFile << code;
+  sourceFile.close();
 
-    // Step 2: Compile the source file into a shared object
-    std::string inclDirs = RUNTIME_INCLUDES ; // RUNTIME_INCLUDES is a macro
+  // Step 2: Compile the source file into a shared object
+  std::string inclDirs = RUNTIME_INCLUDES; // RUNTIME_INCLUDES is a macro
 
-    std::string compileCommand =
-       "g++ -Wall -Wextra -O3 -march=native -std=c++17 -shared -fPIC "
-       + inclDirs
-       + "-o "
-       + libname
-       + " "
-       + tempSourceFile;
+  std::string compileCommand =
+      "g++ -Wall -Wextra -O3 -march=native -std=c++17 -shared -fPIC " +
+      inclDirs + "-o " + libname + " " + tempSourceFile;
 
-    std::cerr << compileCommand << std::endl;
+  std::cerr << compileCommand << std::endl;
 
-    int compileResult = std::system(compileCommand.c_str());
-    if (compileResult != 0)
-        throw std::runtime_error{"Compilation failed."};
+  int compileResult = std::system(compileCommand.c_str());
+  if (compileResult != 0)
+    throw std::runtime_error{"Compilation failed."};
 
-    std::remove(tempSourceFile.c_str());
+  std::remove(tempSourceFile.c_str());
 
-    return dynamic_lib{libname.c_str()};
+  return dynamic_lib{libname.c_str()};
 }
 
 // using basic_type = std::string;
 using basic_type = std::uint64_t;
 
-inline
-std::uint64_t
-gendata(std::uint64_t) { return faker::number::integer(0, 255); }
+inline std::uint64_t gendata(std::uint64_t) {
+  return faker::number::integer<uint64_t>(0, 255);
+}
 
-inline
-std::string
-gendata(std::string) { return faker::location::city(); }
+inline std::string gendata(std::string) { return faker::location::city(); }
 
-inline
-double
-gendata(double) { return faker::number::decimal(0.5); }
+inline double gendata(double) { return faker::number::decimal(0.5); }
 
-std::string
-variant_type_name(std::uint64_t) { return "std::uint64_t"; }
+std::string variant_type_name(std::uint64_t) { return "std::uint64_t"; }
 
-std::string
-variant_type_name(double) { return "double"; }
+std::string variant_type_name(double) { return "double"; }
 
-std::string
-variant_type_name(std::string) { return "std::string_view"; }
+std::string variant_type_name(std::string) { return "std::string_view"; }
 
-
-
-std::string
-gen_code(const std::string& fnname, const std::string& eltype)
-{
+std::string gen_code(const std::string &fnname, const std::string &eltype) {
   std::stringstream os;
 
   os << "#include <jsonlogic/logic.hpp>\n"
      << "extern \"C\"\n"
-     << "jsonlogic::value_variant " << fnname << "(std::vector<jsonlogic::value_variant> vars) {\n"
-     << "  return std::get<" << eltype << ">(vars[0]) == std::get<" << eltype << ">(vars[1]);\n"
+     << "jsonlogic::value_variant " << fnname
+     << "(std::vector<jsonlogic::value_variant> vars) {\n"
+     << "  return std::get<" << eltype << ">(vars[0]) == std::get<" << eltype
+     << ">(vars[1]);\n"
      << "}\n"
      << std::flush;
 
   return os.str();
 }
 
-}
+} // namespace experimental
 
-
-
-const int SEED_ = 42;
+const unsigned long SEED_ = 42;
 static const size_t N_ = 100000;
 static const int N_RUNS_ = 10;
 int main(int argc, const char **argv) {
-  
+
   size_t N = N_;
   if (argc > 1) {
     N = std::stoul(argv[1]);
@@ -141,7 +121,7 @@ int main(int argc, const char **argv) {
     N_RUNS = std::stoul(argv[2]);
   }
 
-  int SEED = SEED_;
+  unsigned long SEED = SEED_;
   if (argc > 3) {
     SEED = std::stoul(argv[3]);
   }
@@ -154,8 +134,8 @@ int main(int argc, const char **argv) {
 
   // Create data
   for (size_t i = 0; i < N; ++i) {
-    xs.push_back(faker::number::integer(0, 255));
-    ys.push_back(faker::number::integer(0, 255));
+    xs.push_back(faker::number::integer<uint64_t>(0, 255));
+    ys.push_back(faker::number::integer<uint64_t>(0, 255));
   }
 
   // JL 1
@@ -188,7 +168,7 @@ int main(int argc, const char **argv) {
 
   auto jl2_lambda = [&] {
     matches = 0;
-    auto[rule, ignore1, igmore2] = jsonlogic::create_logic(jv_xy);
+    auto [rule, ignore1, igmore2] = jsonlogic::create_logic(jv_xy);
     for (size_t i = 0; i < N; ++i) {
       auto v_xy = jsonlogic::apply(rule, {xs[i], ys[i]});
       bool val = jsonlogic::truthy(v_xy);
@@ -216,14 +196,17 @@ int main(int argc, const char **argv) {
 
   // C++ 2
 
-  using evalfn_type = jsonlogic::value_variant(*)(std::vector<jsonlogic::value_variant>);
+  using evalfn_type =
+      jsonlogic::value_variant (*)(std::vector<jsonlogic::value_variant>);
 
-  std::string               fake_mangled{"superfn"};
-  std::string               dllname{"superdll.so"};
-  std::string               benchmarktype = experimental::variant_type_name(experimental::basic_type{});
-  std::string               cxxcode = experimental::gen_code(fake_mangled, benchmarktype);
-  experimental::dynamic_lib dll = experimental::compile_and_load(cxxcode, dllname.c_str());
-  evalfn_type               fn  = dll.function<evalfn_type>(fake_mangled.c_str());
+  std::string fake_mangled{"superfn"};
+  std::string dllname{"superdll.so"};
+  std::string benchmarktype =
+      experimental::variant_type_name(experimental::basic_type{});
+  std::string cxxcode = experimental::gen_code(fake_mangled, benchmarktype);
+  experimental::dynamic_lib dll =
+      experimental::compile_and_load(cxxcode, dllname.c_str());
+  evalfn_type fn = dll.function<evalfn_type>(fake_mangled.c_str());
 
   auto cpp2_lambda = [&] {
     matches = 0;
