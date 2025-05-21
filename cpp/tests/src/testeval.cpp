@@ -91,6 +91,7 @@ bool endsWith(const std::string &str, const std::string &suffix) {
 
 struct settings {
   bool verbose = false;
+  bool quiet = false;
   bool generate_expected = false;
   bool simple_apply = false;
   std::string filename = {};
@@ -186,6 +187,7 @@ int main(int argc, const char **argv) {
   size_t argn = 1;
 
   auto setVerbose = [&config]() -> void { config.verbose = true; };
+  auto setQuiet = [&config]() -> void { config.quiet = true; };
   auto setResult = [&config]() -> void { config.generate_expected = true; };
   auto setSimple = [&config]() -> void { config.simple_apply = true; };
   auto setFile = [&config](const std::string &name) -> bool {
@@ -201,6 +203,8 @@ int main(int argc, const char **argv) {
     MATCH
     || matchOpt0(arguments, argn, "-v", setVerbose)
     || matchOpt0(arguments, argn, "--verbose", setVerbose)
+    || matchOpt0(arguments, argn, "-q", setQuiet)
+    || matchOpt0(arguments, argn, "--quiet", setQuiet)
     || matchOpt0(arguments, argn, "-r", setResult)
     || matchOpt0(arguments, argn, "--result", setResult)
     || matchOpt0(arguments, argn, "-s", setSimple)
@@ -208,6 +212,11 @@ int main(int argc, const char **argv) {
     || noSwitch0(arguments, argn, setFile)
     ;
     // clang-format on
+  }
+
+  if (config.verbose && config.quiet) {
+    std::cerr << "Cannot configure --verbose and --quiet together.\n";
+    exit(1);
   }
 
   bjsn::value all = parseStream(std::cin);
@@ -244,14 +253,14 @@ int main(int argc, const char **argv) {
       resStream << res;
       errorCode = expStream.str() != resStream.str();
 
-      if (config.verbose && errorCode)
+      if ((config.verbose || !config.quiet) && errorCode)
         std::cerr << "test failed: "
                   << "\n  exp: " << expStream.str()
                   << "\n  got: " << resStream.str() << std::endl;
     } else {
       errorCode = 1;
 
-      if (config.verbose)
+      if (config.verbose || !config.quiet)
         std::cerr << "unexpected completion, result: " << res << std::endl;
     }
   } catch (const std::exception &ex) {
@@ -262,7 +271,8 @@ int main(int argc, const char **argv) {
     else if (hasExpected)
       errorCode = 1;
   } catch (...) {
-    if (config.verbose) std::cerr << "caught unknown error" << std::endl;
+    if (config.verbose || !config.quiet)
+      std::cerr << "caught unknown error" << std::endl;
 
     errorCode = 1;
   }
@@ -270,7 +280,7 @@ int main(int argc, const char **argv) {
   if (config.generate_expected && (errorCode == 0))
     std::cout << allobj << std::endl;
 
-  if (config.verbose && errorCode)
+  if ((config.verbose) && errorCode)
     std::cerr << "errorCode: " << errorCode << std::endl;
 
   return errorCode;

@@ -131,6 +131,7 @@ const int SEED_ = 42;
 static const size_t N_ = 100000;
 static const int N_RUNS_ = 10;
 int main(int argc, const char **argv) {
+  
   size_t N = N_;
   if (argc > 1) {
     N = std::stoul(argv[1]);

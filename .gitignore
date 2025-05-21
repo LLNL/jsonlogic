@@ -1,6 +1,8 @@
+.vscode-old/
 .DS_Store
 CMakeFiles/
 build/
+.cache/
 CMakeCache.txt
 Makefile
 *.cmake
