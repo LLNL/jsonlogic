@@ -121,7 +121,7 @@ int main(int argc, const char **argv) {
     N_RUNS = std::stoul(argv[2]);
   }
 
-  unsigned long SEED = SEED_;
+  size_t SEED = SEED_;
   if (argc > 3) {
     SEED = std::stoul(argv[3]);
   }
