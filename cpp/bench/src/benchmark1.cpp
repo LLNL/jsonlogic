@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <jsonlogic/logic.hpp>
+#include <filesystem>
 
 namespace experimental {
 
@@ -60,7 +61,7 @@ dynamic_lib compile_and_load(const std::string &code,
 
   std::string compileCommand =
       "g++ -Wall -Wextra -O3 -march=native -std=c++17 -shared -fPIC " +
-      inclDirs + "-o " + libname + " " + tempSourceFile;
+      inclDirs + " -o " + libname + " " + tempSourceFile;
 
   std::cerr << compileCommand << std::endl;
 
@@ -70,7 +71,9 @@ dynamic_lib compile_and_load(const std::string &code,
 
   std::remove(tempSourceFile.c_str());
 
-  return dynamic_lib{libname.c_str()};
+  std::filesystem::path currentPath = std::filesystem::current_path();
+  std::string fullPath = currentPath / libname;
+  return dynamic_lib{fullPath.c_str()};
 }
 
 // using basic_type = std::string;
