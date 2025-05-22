@@ -8,6 +8,21 @@
 
 #include "jsonlogic/logic.hpp"
 
+
+enum class ResultStatus {  
+  NoError = 0,       // no error
+  Error = 1,           // error in execution. Set resultError if known
+  NoResult = 2,         // For generated // unused right now?
+};
+
+void p_exp_got(const std::stringstream &e, const std::stringstream &r, bool ns = false) {
+  std::cerr << "\n  exp: " << e.str() << (ns ? " *nonstandard" : "")
+    << "\n  got: " << r.str() << std::endl;
+}
+
+bool isError(ResultStatus r) {
+  return static_cast<uint8_t>(r) > 1;
+}
 namespace bjsn = boost::json;
 
 bjsn::value parseStream(std::istream &inps) {
@@ -181,7 +196,9 @@ jsonlogic::any_expr call_apply(settings &config, const bjsn::value &rule,
 int main(int argc, const char **argv) {
   constexpr bool MATCH = false;
 
-  int errorCode = 0;
+  ResultStatus resultStatus;
+
+  int result_matches_expected = 0;
   settings config;
   std::vector<std::string> arguments(argv, argv + argc);
   size_t argn = 1;
@@ -225,7 +242,13 @@ int main(int argc, const char **argv) {
   bjsn::value rule = allobj["rule"];
   const bool hasData = allobj.contains("data");
   bjsn::value dat;
-  const bool hasExpected = allobj.contains("expected");
+  const bool shouldFail = allobj.contains("shouldfail") && allobj["shouldfail"].as_bool();
+  const bool isNonStandard = allobj.contains("nonstandard") && allobj["nonstandard"].as_bool();
+
+  std::stringstream expStream;
+  std::stringstream resStream;
+
+  std::optional<std::string> resultError = std::nullopt;
 
   if (hasData)
     dat = allobj["data"];
@@ -238,50 +261,71 @@ int main(int argc, const char **argv) {
     if (config.verbose) std::cerr << res << std::endl;
 
     if (config.generate_expected) {
-      std::stringstream resStream;
-
-      resStream << res;
-
       allobj["expected"] = parseStream(resStream);
-
-      if (config.verbose) std::cerr << allobj["expected"] << std::endl;
-    } else if (hasExpected) {
-      std::stringstream expStream;
-      std::stringstream resStream;
-
-      expStream << allobj["expected"];
-      resStream << res;
-      errorCode = expStream.str() != resStream.str();
-
-      if ((config.verbose || !config.quiet) && errorCode)
-        std::cerr << "test failed: "
-                  << "\n  exp: " << expStream.str()
-                  << "\n  got: " << resStream.str() << std::endl;
-    } else {
-      errorCode = 1;
-
-      if (config.verbose || !config.quiet)
-        std::cerr << "unexpected completion, result: " << res << std::endl;
     }
+
+    if (config.verbose) std::cerr << allobj["expected"] << std::endl;
+
+
+    expStream << allobj["expected"];
+    resStream << res;
+
+    result_matches_expected = expStream.str() == resStream.str();
+    resultStatus = ResultStatus::NoError;
+
   } catch (const std::exception &ex) {
+    resultStatus = ResultStatus::Error;
+    resultError = ex.what();
     if (config.verbose) std::cerr << "caught error: " << ex.what() << std::endl;
 
     if (config.generate_expected)
       allobj.erase("expected");
-    else if (hasExpected)
-      errorCode = 1;
   } catch (...) {
+    resultStatus = ResultStatus::Error;
     if (config.verbose || !config.quiet)
       std::cerr << "caught unknown error" << std::endl;
-
-    errorCode = 1;
   }
 
-  if (config.generate_expected && (errorCode == 0))
+  if (config.generate_expected && (result_matches_expected == 1))
     std::cout << allobj << std::endl;
 
-  if ((config.verbose) && errorCode)
-    std::cerr << "errorCode: " << errorCode << std::endl;
 
-  return errorCode;
+  if (resultStatus == ResultStatus::NoError) {
+    if (shouldFail) {
+      if (config.verbose || !config.quiet) {
+        p_exp_got(expStream, resStream, isNonStandard);
+      }
+      return 1;
+    }
+    return !result_matches_expected;
+  }
+
+  // beyond here, we have Errors
+  
+  // we have an error, but we should fail.
+  if (shouldFail) {
+    return 0;
+  }
+
+  // we have errors, and we should not fail.
+  
+  if (config.verbose || !config.quiet) {
+    std::cerr << "test failed: ";
+
+    switch (resultStatus) {
+      case ResultStatus::NoResult:
+      std::cerr << "no result generated\n";
+      break;
+
+    default:
+      std::cerr << "error: " << resultError.value_or("Unknown error") << std::endl;
+      break;
+    }
+  }
+
+
+  if (config.verbose)
+    std::cerr << "result_matches_expected: " << result_matches_expected << std::endl;
+
+  return static_cast<int>(resultStatus);
 }

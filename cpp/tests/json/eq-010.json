@@ -1,1 +1,1 @@
-{"rule":{"==":[[], []]},"expected":false, "description": "Compare two empty arrays."}
+{"rule":{"==":[[], []]},"expected":false, "shouldfail": false, "description": "Compare two empty arrays."}
