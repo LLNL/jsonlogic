@@ -68,7 +68,7 @@ bool matchOpt1(const std::vector<std::string> &args, N &pos,
                const std::string &opt, T &fld) {
   const std::string &arg = args.at(pos);
 
-  if (arg.find(opt) != 0)
+  if (!arg.starts_with(opt))
     return false;
 
   ++pos;
@@ -82,7 +82,7 @@ bool matchOpt1(const std::vector<std::string> &args, N &pos,
                const std::string &opt, Fn fn) {
   std::string arg(args.at(pos));
 
-  if (arg.find(opt) != 0)
+  if (!arg.starts_with(opt))
     return false;
 
   ++pos;
@@ -96,7 +96,7 @@ bool matchOpt0(const std::vector<std::string> &args, N &pos,
                const std::string &opt, Fn fn) {
   const std::string &arg(args.at(pos));
 
-  if (arg.find(opt) != 0)
+  if (!arg.starts_with(opt))
     return false;
 
   fn();

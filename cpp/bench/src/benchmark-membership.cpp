@@ -56,7 +56,7 @@ int main(int argc, const char **argv) {
   std::cout << "HAYSTACK_SZ: " << HAYSTACK_SZ << "\n";
   std::cout << "HAYSTACK_RANGE_: " << HAYSTACK_RANGE << "\n";
 
-  uint64_t val;
+  uint64_t val = 0;
   // create haystack
   while (haystack_set.size() <= HAYSTACK_SZ) {
     val = faker::number::integer<uint64_t>(0, HAYSTACK_RANGE);
