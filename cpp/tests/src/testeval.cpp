@@ -4,25 +4,35 @@
 #include <boost/range/adaptor/transformed.hpp>
 #include <fstream>
 #include <iostream>
-#include <ranges>
+#include <sstream>
 
-#include "jsonlogic/logic.hpp"
+#include <jsonlogic/logic.hpp>
 
-
-enum class ResultStatus {  
-  NoError = 0,       // no error
-  Error = 1,           // error in execution. Set resultError if known
-  NoResult = 2,         // For generated // unused right now?
+enum class ResultStatus : std::uint8_t {
+  NoError = 0,  // no error
+  Error = 1,    // error in execution. Set resultError if known
+  NoResult = 2, // For generated // unused right now?
 };
 
-void p_exp_got(const std::stringstream &e, const std::stringstream &r, bool ns = false) {
+/**
+ * @brief Prints the expected and received stringstream values to std::cerr.
+ *
+ * This function is typically used for debugging or testing purposes to display
+ * the expected output (`e`) and the actual output (`r`). If the `ns` flag is
+ * set to true, it marks the output as nonstandard.
+ *
+ * @param e   The expected value as a stringstream.
+ * @param r   The received (actual) value as a stringstream.
+ * @param ns  Optional flag indicating if the output is nonstandard (default:
+ * false).
+ */
+void p_exp_got(const std::stringstream &e, const std::stringstream &r,
+               bool ns = false) {
   std::cerr << "\n  exp: " << e.str() << (ns ? " *nonstandard" : "")
-    << "\n  got: " << r.str() << std::endl;
+            << "\n  got: " << r.str() << std::endl;
 }
 
-bool isError(ResultStatus r) {
-  return static_cast<uint8_t>(r) > 1;
-}
+bool isError(ResultStatus r) { return static_cast<uint8_t>(r) > 1; }
 namespace bjsn = boost::json;
 
 bjsn::value parseStream(std::istream &inps) {
@@ -35,12 +45,14 @@ bjsn::value parseStream(std::istream &inps) {
 
     p.write(line.c_str(), line.size(), ec);
 
-    if (ec) return nullptr;
+    if (ec)
+      return nullptr;
   }
 
   std::error_code ec;
   p.finish(ec);
-  if (ec) return nullptr;
+  if (ec)
+    return nullptr;
 
   return p.release();
 }
@@ -52,11 +64,12 @@ bjsn::value parseFile(const std::string &filename) {
 }
 
 template <class N, class T>
-bool matchOpt1(const std::vector<std::string> &args, N &pos, std::string opt,
-               T &fld) {
-  std::string arg(args.at(pos));
+bool matchOpt1(const std::vector<std::string> &args, N &pos,
+               const std::string &opt, T &fld) {
+  const std::string &arg = args.at(pos);
 
-  if (arg.find(opt) != 0) return false;
+  if (arg.find(opt) != 0)
+    return false;
 
   ++pos;
   fld = boost::lexical_cast<T>(args.at(pos));
@@ -65,11 +78,12 @@ bool matchOpt1(const std::vector<std::string> &args, N &pos, std::string opt,
 }
 
 template <class N, class Fn>
-bool matchOpt1(const std::vector<std::string> &args, N &pos, std::string opt,
-               Fn fn) {
+bool matchOpt1(const std::vector<std::string> &args, N &pos,
+               const std::string &opt, Fn fn) {
   std::string arg(args.at(pos));
 
-  if (arg.find(opt) != 0) return false;
+  if (arg.find(opt) != 0)
+    return false;
 
   ++pos;
   fn(args.at(pos));
@@ -78,11 +92,12 @@ bool matchOpt1(const std::vector<std::string> &args, N &pos, std::string opt,
 }
 
 template <class N, class Fn>
-bool matchOpt0(const std::vector<std::string> &args, N &pos, std::string opt,
-               Fn fn) {
-  std::string arg(args.at(pos));
+bool matchOpt0(const std::vector<std::string> &args, N &pos,
+               const std::string &opt, Fn fn) {
+  const std::string &arg(args.at(pos));
 
-  if (arg.find(opt) != 0) return false;
+  if (arg.find(opt) != 0)
+    return false;
 
   fn();
   ++pos;
@@ -109,7 +124,7 @@ struct settings {
   bool quiet = false;
   bool generate_expected = false;
   bool simple_apply = false;
-  std::string filename = {};
+  std::string filename;
 };
 
 /// converts val to a value_variant
@@ -121,39 +136,39 @@ jsonlogic::value_variant to_value_variant(const bjsn::value &n) {
   jsonlogic::value_variant res;
 
   switch (n.kind()) {
-    case bjsn::kind::string: {
-      const bjsn::string &str = n.get_string();
-      res = std::string_view(str.data(), str.size());
-      break;
-    }
+  case bjsn::kind::string: {
+    const bjsn::string &str = n.get_string();
+    res = std::string_view(str.data(), str.size());
+    break;
+  }
 
-    case bjsn::kind::int64: {
-      res = n.get_int64();
-      break;
-    }
+  case bjsn::kind::int64: {
+    res = n.get_int64();
+    break;
+  }
 
-    case bjsn::kind::uint64: {
-      res = n.get_uint64();
-      break;
-    }
+  case bjsn::kind::uint64: {
+    res = n.get_uint64();
+    break;
+  }
 
-    case bjsn::kind::double_: {
-      res = n.get_double();
-      break;
-    }
+  case bjsn::kind::double_: {
+    res = n.get_double();
+    break;
+  }
 
-    case bjsn::kind::bool_: {
-      res = n.get_bool();
-      break;
-    }
+  case bjsn::kind::bool_: {
+    res = n.get_bool();
+    break;
+  }
 
-    case bjsn::kind::null: {
-      res = std::monostate{};
-      break;
-    }
+  case bjsn::kind::null: {
+    res = std::monostate{};
+    break;
+  }
 
-    default:
-      throw std::runtime_error{"cannot convert"};
+  default:
+    throw std::runtime_error{"cannot convert"};
   }
 
   assert(!res.valueless_by_exception());
@@ -164,7 +179,8 @@ jsonlogic::any_expr call_apply(settings &config, const bjsn::value &rule,
                                const bjsn::value &data) {
   using value_vector = std::vector<jsonlogic::value_variant>;
 
-  if (config.simple_apply) return jsonlogic::apply(rule, data);
+  if (config.simple_apply)
+    return jsonlogic::apply(rule, data);
 
   jsonlogic::logic_rule logic = jsonlogic::create_logic(rule);
 
@@ -188,7 +204,8 @@ jsonlogic::any_expr call_apply(settings &config, const bjsn::value &rule,
     }
   }
 
-  if (config.verbose) std::cerr << "falling back to normal apply" << std::endl;
+  if (config.verbose)
+    std::cerr << "falling back to normal apply" << std::endl;
 
   return logic.apply(jsonlogic::data_accessor(data));
 }
@@ -196,9 +213,9 @@ jsonlogic::any_expr call_apply(settings &config, const bjsn::value &rule,
 int main(int argc, const char **argv) {
   constexpr bool MATCH = false;
 
-  ResultStatus resultStatus;
+  ResultStatus resultStatus{0};
 
-  int result_matches_expected = 0;
+  bool result_matches_expected = false;
   settings config;
   std::vector<std::string> arguments(argv, argv + argc);
   size_t argn = 1;
@@ -210,7 +227,8 @@ int main(int argc, const char **argv) {
   auto setFile = [&config](const std::string &name) -> bool {
     const bool jsonFile = endsWith(name, ".json");
 
-    if (jsonFile) config.filename = name;
+    if (jsonFile)
+      config.filename = name;
 
     return jsonFile;
   };
@@ -242,8 +260,10 @@ int main(int argc, const char **argv) {
   bjsn::value rule = allobj["rule"];
   const bool hasData = allobj.contains("data");
   bjsn::value dat;
-  const bool shouldFail = allobj.contains("shouldfail") && allobj["shouldfail"].as_bool();
-  const bool isNonStandard = allobj.contains("nonstandard") && allobj["nonstandard"].as_bool();
+  const bool shouldFail =
+      allobj.contains("shouldfail") && allobj["shouldfail"].as_bool();
+  const bool isNonStandard =
+      allobj.contains("nonstandard") && allobj["nonstandard"].as_bool();
 
   std::stringstream expStream;
   std::stringstream resStream;
@@ -258,14 +278,15 @@ int main(int argc, const char **argv) {
   try {
     jsonlogic::any_expr res = call_apply(config, rule, dat);
 
-    if (config.verbose) std::cerr << res << std::endl;
+    if (config.verbose)
+      std::cerr << res << std::endl;
 
     if (config.generate_expected) {
       allobj["expected"] = parseStream(resStream);
     }
 
-    if (config.verbose) std::cerr << allobj["expected"] << std::endl;
-
+    if (config.verbose)
+      std::cerr << allobj["expected"] << std::endl;
 
     expStream << allobj["expected"];
     resStream << res;
@@ -276,7 +297,8 @@ int main(int argc, const char **argv) {
   } catch (const std::exception &ex) {
     resultStatus = ResultStatus::Error;
     resultError = ex.what();
-    if (config.verbose) std::cerr << "caught error: " << ex.what() << std::endl;
+    if (config.verbose)
+      std::cerr << "caught error: " << ex.what() << std::endl;
 
     if (config.generate_expected)
       allobj.erase("expected");
@@ -286,9 +308,8 @@ int main(int argc, const char **argv) {
       std::cerr << "caught unknown error" << std::endl;
   }
 
-  if (config.generate_expected && (result_matches_expected == 1))
+  if (config.generate_expected && result_matches_expected)
     std::cout << allobj << std::endl;
-
 
   if (resultStatus == ResultStatus::NoError) {
     if (shouldFail) {
@@ -297,35 +318,36 @@ int main(int argc, const char **argv) {
       }
       return 1;
     }
-    return !result_matches_expected;
+    return static_cast<int>(!result_matches_expected);
   }
 
   // beyond here, we have Errors
-  
+
   // we have an error, but we should fail.
   if (shouldFail) {
     return 0;
   }
 
   // we have errors, and we should not fail.
-  
+
   if (config.verbose || !config.quiet) {
     std::cerr << "test failed: ";
 
     switch (resultStatus) {
-      case ResultStatus::NoResult:
+    case ResultStatus::NoResult:
       std::cerr << "no result generated\n";
       break;
 
     default:
-      std::cerr << "error: " << resultError.value_or("Unknown error") << std::endl;
+      std::cerr << "error: " << resultError.value_or("Unknown error")
+                << std::endl;
       break;
     }
   }
 
-
   if (config.verbose)
-    std::cerr << "result_matches_expected: " << result_matches_expected << std::endl;
+    std::cerr << "result_matches_expected: " << result_matches_expected
+              << std::endl;
 
   return static_cast<int>(resultStatus);
 }

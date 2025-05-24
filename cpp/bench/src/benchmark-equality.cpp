@@ -1,39 +1,43 @@
-#include <faker-cxx/faker.h>
-
-#include <dlfcn.h>
-#include <cstdio>
 #include <bench.hpp>
 #include <boost/json.hpp>
 #include <boost/json/src.hpp>
+#include <chrono>
+#include <cstdio>
+#include <dlfcn.h>
+#include <faker-cxx/location.h>
+#include <faker-cxx/number.h>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <jsonlogic/logic.hpp>
-#include <filesystem>
+#include <string>
 
 namespace experimental {
 
 struct dynamic_lib {
   explicit dynamic_lib(const char *dllname)
       : handle(dlopen(dllname, RTLD_LAZY)) {
-    if (!handle)
+    if (handle == nullptr)
       throw std::runtime_error{std::string{"Unable to load shared object: "} +
                                dlerror()};
   }
 
   ~dynamic_lib() {
-    if (handle)
+    if (handle != nullptr)
       dlclose(handle);
   }
 
-  dynamic_lib(dynamic_lib &&other) { std::swap(this->handle, other.handle); }
+  dynamic_lib(dynamic_lib &&other) noexcept {
+    std::swap(this->handle, other.handle);
+  }
 
-  dynamic_lib &operator=(dynamic_lib &&other) {
+  dynamic_lib &operator=(dynamic_lib &&other) noexcept {
     std::swap(this->handle, other.handle);
     return *this;
   }
 
   template <class FnType> FnType function(const char *name) const {
-    return reinterpret_cast<FnType>(dlsym(handle, name));
+    return (FnType)(dlsym(handle, name));
   }
 
 private:
@@ -50,7 +54,7 @@ dynamic_lib compile_and_load(const std::string &code,
   // There is still a very minor risk of a race condition here, but
   // it would require guessing the name of the file and creating it
   // before the ofstream sourceFile statement a few lines down.
-  const std::string tempSourceFile = std::tmpnam(nullptr) + std::string{".cpp"};
+  const std::string tempSourceFile = tmpnam(nullptr) + std::string{".cpp"};
 
   std::ofstream sourceFile{tempSourceFile};
   if (!sourceFile)
@@ -86,7 +90,9 @@ inline std::uint64_t gendata(std::uint64_t) {
   return faker::number::integer<uint64_t>(0, 255);
 }
 
-inline std::string gendata(std::string) { return faker::location::city(); }
+inline std::string gendata(const std::string &) {
+  return faker::location::city();
+}
 
 inline double gendata(double) { return faker::number::decimal(0.5); }
 
@@ -94,11 +100,12 @@ std::string variant_type_name(std::uint64_t) { return "std::uint64_t"; }
 
 std::string variant_type_name(double) { return "double"; }
 
-std::string variant_type_name(std::string) { return "std::string_view"; }
+std::string variant_type_name(const std::string &) {
+  return "std::string_view";
+}
 
 std::string gen_code(const std::string &fnname, const std::string &eltype) {
   std::stringstream os;
-
   os << "#include <jsonlogic/logic.hpp>\n"
      << "extern \"C\"\n"
      << "jsonlogic::value_variant " << fnname
@@ -114,8 +121,8 @@ std::string gen_code(const std::string &fnname, const std::string &eltype) {
 } // namespace experimental
 
 const unsigned long SEED_ = 42;
-static const size_t N_ = 100000;
-static const int N_RUNS_ = 10;
+static const size_t N_ = 1'000'000;
+static const int N_RUNS_ = 3;
 int main(int argc, const char **argv) {
 
   size_t N = N_;
@@ -205,15 +212,22 @@ int main(int argc, const char **argv) {
   using evalfn_type =
       jsonlogic::value_variant (*)(std::vector<jsonlogic::value_variant>);
 
+  std::chrono::steady_clock::time_point start_addl =
+      std::chrono::steady_clock::now();
   std::string fake_mangled{"superfn"};
   std::string dllname{"superdll.so"};
   std::string benchmarktype =
       experimental::variant_type_name(experimental::basic_type{});
   std::string cxxcode = experimental::gen_code(fake_mangled, benchmarktype);
   experimental::dynamic_lib dll =
-      experimental::compile_and_load(cxxcode, dllname.c_str());
-  evalfn_type fn = dll.function<evalfn_type>(fake_mangled.c_str());
+      experimental::compile_and_load(cxxcode, dllname);
+  auto fn = dll.function<evalfn_type>(fake_mangled.c_str());
+  std::chrono::steady_clock::time_point end_addl =
+      std::chrono::steady_clock::now();
 
+  ChronoUnit elapsed_addl = end_addl - start_addl;
+
+  std::cout << "Adding " << elapsed_addl << " to cpp2\n";
   auto cpp2_lambda = [&] {
     matches = 0;
     for (size_t i = 0; i < N; ++i) {
@@ -225,7 +239,7 @@ int main(int argc, const char **argv) {
     }
   };
 
-  auto cpp2_bench = Benchmark("2ints-cpp2", cpp2_lambda);
+  auto cpp2_bench = Benchmark("2ints-cpp2", cpp2_lambda, elapsed_addl);
 
   auto jl_results = jl_bench.run(N_RUNS);
   std::cout << "- jl1 matches: " << matches << std::endl;
