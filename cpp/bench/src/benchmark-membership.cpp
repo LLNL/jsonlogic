@@ -6,6 +6,7 @@
 #include <iostream>
 #include <jsonlogic/logic.hpp>
 #include <set>
+#include <span>
 #include <vector>
 
 const int SEED_ = 42;
@@ -14,28 +15,29 @@ static const size_t HAYSTACK_SZ_ = 100000;
 static const size_t N_ = 100000;
 static const int N_RUNS_ = 10;
 int main(int argc, const char **argv) {
+  std::span<const char *> args(argv, argc);
   size_t N = N_;
   if (argc > 1) {
-    N = std::stoul(argv[1]);
+    N = std::stoul(args[1]);
   }
   size_t N_RUNS = N_RUNS_;
   if (argc > 2) {
-    N_RUNS = std::stoul(argv[2]);
+    N_RUNS = std::stoul(args[2]);
   }
 
   size_t SEED = SEED_;
   if (argc > 3) {
-    SEED = std::stoul(argv[3]);
+    SEED = std::stoul(args[3]);
   }
 
   size_t HAYSTACK_SZ = HAYSTACK_SZ_;
   if (argc > 4) {
-    HAYSTACK_SZ = std::stoul(argv[4]);
+    HAYSTACK_SZ = std::stoul(args[4]);
   }
 
   size_t HAYSTACK_RANGE = HAYSTACK_RANGE_;
   if (argc > 5) {
-    HAYSTACK_RANGE = std::stoul(argv[5]);
+    HAYSTACK_RANGE = std::stoul(args[5]);
   }
 
   if (HAYSTACK_SZ > HAYSTACK_RANGE) {
