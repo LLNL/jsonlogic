@@ -162,13 +162,14 @@ jsonlogic::value_variant to_value_variant(const bjsn::value &n) {
     break;
   }
 
-  case bjsn::kind::null: {
-    res = std::monostate{};
-    break;
-  }
+    case bjsn::kind::null: {
+      res = nullptr;
+      break;
+    }
 
-  default:
-    throw std::runtime_error{"cannot convert"};
+    default:
+      std::cerr << "Conversion Error: " << n << std::endl;
+      throw std::runtime_error{"cannot convert"};
   }
 
   assert(!res.valueless_by_exception());

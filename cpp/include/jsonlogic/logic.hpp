@@ -77,7 +77,7 @@ using value_variant = std::variant< std::monostate,
 ///     a string_view or std::variant<string_view, int ...> ..
 ///   * consider removing the limitation on any_expr being a value..
 using variable_accessor =
-    std::function<any_expr(const boost::json::value &, int)>;
+    std::function<any_expr(value_variant, int)>;
 
 /// evaluates \ref exp and uses \ref vars to query variables from
 ///   the context.
@@ -123,8 +123,9 @@ any_expr to_expr(bool val);
 any_expr to_expr(std::int64_t val);
 any_expr to_expr(std::uint64_t val);
 any_expr to_expr(double val);
-any_expr to_expr(boost::json::string val);
+any_expr to_expr(std::string_view val);
 any_expr to_expr(const boost::json::array &val);
+any_expr to_expr(boost::json::string val);
 /// \}
 
 /// creates a value representation for \p n in jsonlogic form.

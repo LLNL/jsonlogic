@@ -53,22 +53,22 @@ struct oper_n : oper {
 };
 
 struct value_base : expr {
-  virtual boost::json::value to_json() const = 0;
+  virtual value_variant to_variant() const = 0;
 };
 
 template <class T>
 struct value_generic : value_base {
   using value_type = T;
 
-  explicit value_generic(T t) : val(std::move(t)) {}
+  explicit value_generic(value_type t) : val(std::move(t)) {}
 
   // T &value() { return val; }
-  const T &value() const { return val; }
+  const value_type &value() const { return val; }
 
-  boost::json::value to_json() const final;
+  value_variant to_variant() const final;
 
- private:
-  T val;
+private:
+  value_type val;
 };
 
 //
@@ -225,10 +225,10 @@ struct var : oper {
   void accept(visitor &) const final;
 
   void num(int val) { idx = val; }
-  int num() const { return idx; }
+  std::int16_t num() const { return idx; }
 
- private:
-  int idx = computed;
+private:
+  std::int16_t idx = computed;
 };
 
 /// missing is modeled as operator with arbitrary number of arguments
@@ -267,7 +267,7 @@ struct null_value : value_base {
 
   std::nullptr_t value() const { return nullptr; }
 
-  boost::json::value to_json() const final;
+  value_variant to_variant() const final;
 };
 
 struct bool_value : value_generic<bool> {
@@ -298,10 +298,10 @@ struct real_value : value_generic<double> {
   void accept(visitor &) const final;
 };
 
-using string_value_base = value_generic<std::string_view>;
 
-struct string_value : string_value_base {
-  using base = string_value_base;
+
+struct string_value : value_generic<std::string_view> {
+  using base = value_generic<std::string_view>;
   using base::base;
 
   void accept(visitor &) const final;

@@ -11,6 +11,9 @@
 #include <string>
 #include <unordered_map>
 #include <charconv>
+//~ #include <set>
+//~ #include <deque>
+#include <forward_list>
 
 #if WITH_JSON_LOGIC_CPP_EXTENSIONS
 #include <regex>
@@ -27,6 +30,32 @@ namespace {
 constexpr bool DEBUG_OUTPUT = false;
 constexpr int COMPUTED_VARIABLE_NAME = -1;
 }  // namespace
+
+
+namespace {
+  // \TODO this is not thread safe and should be moved into an execution context
+
+  std::string_view safe_string(std::string v)
+  {
+    // if the compiler uses small string optimization, we cannot
+    //   use an std::vector because resizing invalidates the
+    //   string_views.
+    static std::set<std::string> stringstore;
+
+    auto res = stringstore.emplace(std::move(v));
+    return *res.first;
+    //~ static std::forward_list<std::string> stringstore;
+
+    //~ stringstore.emplace_front(std::move(v));
+    //~ return stringstore.front();
+  }
+
+  template <class iterator>
+  std::string_view safe_string(iterator aa, iterator zz)
+  {
+    return safe_string(std::string(aa, zz));
+  }
+}
 
 namespace jsonlogic {
 
@@ -173,11 +202,12 @@ void regex_match::accept(visitor &v) const { v.visit(*this); }
 
 // to_json implementations
 template <class T>
-json::value value_generic<T>::to_json() const {
+value_variant value_generic<T>::to_variant() const {
   return value();
 }
 
-json::value null_value::to_json() const { return value(); }
+value_variant null_value::to_variant() const { return value(); }
+
 
 // num_evaluated_operands implementations
 int oper::num_evaluated_operands() const { return size(); }
@@ -425,7 +455,7 @@ any_expr translate_internal(json::value n, variable_map &varmap) {
     }
 
     case json::kind::string: {
-      res = &mk_value<string_value>(std::move(n.get_string()));
+      res = &mk_value<string_value>(safe_string(n.get_string().begin(), n.get_string().end()));
       break;
     }
 
@@ -505,6 +535,9 @@ any_expr to_expr(std::uint64_t val) {
 }
 any_expr to_expr(double val) { return any_expr(new real_value(val)); }
 any_expr to_expr(json::string val) {
+  return any_expr(new string_value(safe_string(val.begin(), val.end())));
+}
+any_expr to_expr(std::string_view val) {
   return any_expr(new string_value(std::move(val)));
 }
 
@@ -630,7 +663,7 @@ any_expr to_expr(value_variant val) {
     }
 
     case strv_variant: {
-      res = to_expr(boost::json::string(std::get<std::string_view>(val)));
+      res = to_expr(std::get<std::string_view>(val));
       break;
     }
 
@@ -731,21 +764,27 @@ inline double to_concrete(bool v, const double &) { return v; }
 inline double to_concrete(std::nullptr_t, const double &) { return 0; }
 /// \}
 
+
+
+
 /// conversion to string
 /// \{
 template <class Val>
-inline json::string to_concrete(Val v, const json::string &) {
-  return json::string{std::to_string(v)};
+inline std::string_view to_concrete(Val v, const std::string_view &) {
+  return safe_string(std::to_string(v));
 }
+inline std::string_view to_concrete(bool v, const std::string_view &) {
+  static constexpr const char* bool_string[] = {"false", "true"};
 
-inline json::string to_concrete(bool v, const json::string &) {
-  return json::string{v ? "true" : "false"};
+  return bool_string[v];
 }
-inline json::string to_concrete(const json::string &s, const json::string &) {
+inline std::string_view to_concrete(const std::string_view &s, const std::string_view &) {
   return s;
 }
-inline json::string to_concrete(std::nullptr_t, const json::string &) {
-  return json::string{"null"};
+inline std::string_view to_concrete(std::nullptr_t, const std::string_view &) {
+  static constexpr const char* null_string = "null";
+
+  return null_string;
 }
 /// \}
 
@@ -756,7 +795,7 @@ inline bool to_concrete(bool v, const bool &) { return v; }
 inline bool to_concrete(std::int64_t v, const bool &) { return v; }
 inline bool to_concrete(std::uint64_t v, const bool &) { return v; }
 inline bool to_concrete(double v, const bool &) { return v; }
-inline bool to_concrete(const json::string &v, const bool &) {
+inline bool to_concrete(const std::string_view &v, const bool &) {
   return v.size() != 0;
 }
 inline bool to_concrete(std::nullptr_t, const bool &) { return false; }
@@ -786,8 +825,8 @@ T to_calc_type(const T *val) {
   return *val;
 }
 
-std::string_view to_calc_type(const json::string *val) {
-  return std::string_view{val->data(), val->size()};
+std::string_view to_calc_type(const std::string_view *val) {
+  return *val;
 }
 /*
 std::nullptr_t
@@ -931,7 +970,7 @@ struct relational_operator_base : numeric_binary_operator_base {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<std::uint64_t, std::uint64_t> coerce(std::string_view* lv,
+  std::tuple<std::uint64_t, std::uint64_t> coerce(const std::string_view* lv,
                                                   const std::uint64_t *rv) {
     return {to_concrete(*lv, *rv), *rv};
   }
@@ -941,19 +980,19 @@ struct relational_operator_base : numeric_binary_operator_base {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<bool, bool> coerce(const json::string *, const bool *) {
+  std::tuple<bool, bool> coerce(const std::string_view *, const bool *) {
     // strings and boolean are never equal
     return {true, false};
   }
 
-  std::tuple<bool, bool> coerce(const bool *, const json::string *) {
+  std::tuple<bool, bool> coerce(const bool *, const std::string_view *) {
     // strings and boolean are never equal
     return {true, false};
   }
 
   std::tuple<std::string_view, std::string_view> coerce(
-      const json::string *lv, const json::string *rv) {
-    return {to_calc_type(lv), to_calc_type(rv)};
+      const std::string_view *lv, const std::string_view *rv) {
+    return {*lv, *rv};
   }
 
   std::tuple<bool, bool> coerce(const bool *lv, const bool *rv) {
@@ -1079,7 +1118,7 @@ struct relational_operator : relational_operator_base,
     return {*lv, 0};  // null pointer -> 0.0
   }
 
-  std::tuple<std::string_view, std::nullptr_t> coerce(const json::string *lv,
+  std::tuple<std::string_view, std::nullptr_t> coerce(const std::string_view *lv,
                                                       std::nullptr_t) {
     return {to_calc_type(lv), nullptr};  // requires special handling
   }
@@ -1103,7 +1142,7 @@ struct relational_operator : relational_operator_base,
   }
 
   std::tuple<std::nullptr_t, std::string_view> coerce(std::nullptr_t,
-                                                      const json::string *rv) {
+                                                      const std::string_view *rv) {
     return {nullptr, to_calc_type(rv)};  // requires special handling
   }
 };
@@ -1186,9 +1225,8 @@ struct string_operator_non_destructive {
   using result_type = any_expr;
 
   std::tuple<std::string_view, std::string_view> coerce(
-      const json::string *lv, const json::string *rv) {
-    return {std::string_view{lv->data(), lv->size()},
-            std::string_view{rv->data(), rv->size()}};
+      const std::string_view *lv, const std::string_view *rv) {
+    return {*lv, *rv};
   }
 };
 
@@ -1318,23 +1356,23 @@ any_expr convert(any_expr val, const string_operator_non_destructive &) {
 
     // need to convert values
     void visit(const bool_value &el) final {
-      res = to_expr(to_concrete(el.value(), json::string{}));
+      res = to_expr(to_concrete(el.value(), std::string_view{}));
     }
 
     void visit(const int_value &el) final {
-      res = to_expr(to_concrete(el.value(), json::string{}));
+      res = to_expr(to_concrete(el.value(), std::string_view{}));
     }
 
     void visit(const unsigned_int_value &el) final {
-      res = to_expr(to_concrete(el.value(), json::string{}));
+      res = to_expr(to_concrete(el.value(), std::string_view{}));
     }
 
     void visit(const real_value &el) final {
-      res = to_expr(to_concrete(el.value(), json::string{}));
+      res = to_expr(to_concrete(el.value(), std::string_view{}));
     }
 
     void visit(const null_value &el) final {
-      res = to_expr(to_concrete(el.value(), json::string{}));
+      res = to_expr(to_concrete(el.value(), std::string_view{}));
     }
 
     any_expr result() && { return std::move(res); }
@@ -1559,8 +1597,8 @@ struct binary_operator_visitor_2 : forwarding_visitor {
   void calc(rhs_value_t rv) {
     auto [ll, rr] = op.coerce(lv, rv);
 
-    //~ std::cerr << lv << " -- " << rv << " " << typeid(ll).name() <<
-    // std::endl;
+    //~ std::cerr << lv << " -- " << rv << " " << typeid(ll).name()
+              //~ << std::endl;
     res = op(std::move(ll), std::move(rr));
     //~ std::cerr << lv << " == " << rv << std::endl;
   }
@@ -2304,16 +2342,15 @@ struct sequence_function {
   any_expr operator()(any_expr &&elem) const {
     any_expr *elptr = &elem;  // workaround, b/c unique_ptr cannot be captured
 
-    evaluator sub{[elptr](const json::value &keyval, int) -> any_expr {
-                    if (const json::string *pkey = keyval.if_string()) {
-                      const json::string &key = *pkey;
-
-                      if (key.size() == 0) return clone_expr(*elptr);
+    evaluator sub{[elptr](value_variant keyval, int) -> any_expr {
+                    if (std::string_view* pkey = std::get_if<std::string_view>(&keyval)) {
+                      if (pkey->size() == 0)
+                        return clone_expr(*elptr);
 
                       try {
                         object_value &o = down_cast<object_value>(**elptr);
 
-                        if (auto pos = o.find(key); pos != o.end())
+                        if (auto pos = o.find(*pkey); pos != o.end())
                           return clone_expr(pos->second);
                       } catch (const type_error &) {
                       }
@@ -2377,8 +2414,8 @@ struct sequence_reduction {
     any_expr *acptr = &accu;  // workaround, b/c unique_ptr cannot be captured
     any_expr *elptr = &elem;  // workaround, b/c unique_ptr cannot be captured
 
-    evaluator sub{[acptr, elptr](const json::value &keyval, int) -> any_expr {
-                    if (const json::string *pkey = keyval.if_string()) {
+    evaluator sub{[acptr, elptr](value_variant keyval, int) -> any_expr {
+                    if (const std::string_view *pkey = std::get_if<std::string_view>(&keyval)) {
                       if (*pkey == "current") return clone_expr(*elptr);
 
                       if (*pkey == "accumulator") return clone_expr(*acptr);
@@ -2769,7 +2806,7 @@ void evaluator::visit(const var &n) {
   value_base &val = down_cast<value_base>(*elm);
 
   try {
-    calcres = vars(val.to_json(), n.num());
+    calcres = vars(val.to_variant(), n.num());
   } catch (const variable_resolution_error &) {
     calcres = (n.num_evaluated_operands() > 1) ? eval(n.operand(1))
                                                : to_expr(nullptr);
@@ -2780,7 +2817,7 @@ std::size_t evaluator::missing_aux(array &elems) {
   auto avail = [calc = this](const any_expr &v) -> bool {
     try {
       const value_base &val = down_cast<value_base>(*v);
-      any_expr res = calc->vars(val.to_json(), COMPUTED_VARIABLE_NAME);
+      any_expr res = calc->vars(val.to_variant(), COMPUTED_VARIABLE_NAME);
 
       // value-missing := res == 0 || *res is a null_value
       // return !value-missing
@@ -2872,14 +2909,14 @@ void evaluator::visit(const unsigned_int_value &n) { _value(n); }
 void evaluator::visit(const real_value &n) { _value(n); }
 void evaluator::visit(const string_value &n) { _value(n); }
 
-any_expr eval_path(const json::string &path, const json::object *obj) {
+any_expr eval_path(std::string_view path, const json::object *obj) {
   if (obj) {
     if (auto pos = obj->find(path); pos != obj->end())
       return jsonlogic::to_expr(pos->value());
 
     if (std::size_t pos = path.find('.'); pos != json::string::npos) {
-      json::string selector = path.subview(0, pos);
-      json::string suffix = path.subview(pos + 1);
+      std::string_view selector = path.substr(0, pos);
+      std::string_view suffix   = path.substr(pos + 1);
 
       return eval_path(suffix, obj->at(selector).if_object());
     }
@@ -2907,24 +2944,24 @@ any_expr apply(const any_expr &exp, const variable_accessor &vars) {
 }
 
 any_expr apply(const any_expr &exp) {
-  return jsonlogic::apply(exp, [](const json::value &, int) -> any_expr {
+  return jsonlogic::apply(exp, [](value_variant, int) -> any_expr {
     throw std::logic_error{"variable accessor not available"};
   });
 }
 
 variable_accessor data_accessor(json::value data) {
-  return [data = std::move(data)](const json::value &keyval, int) -> any_expr {
-    if (const json::string *ppath = keyval.if_string()) {
+  return [data = std::move(data)](value_variant keyval, int) -> any_expr {
+    if (const std::string_view *ppath = std::get_if<std::string_view>(&keyval)) {
       //~ std::cerr << *ppath << std::endl;
       return ppath->size() ? eval_path(*ppath, data.if_object())
                            : to_expr(data);
     }
 
-    if (const std::int64_t *pidx = keyval.if_int64())
+    if (const std::int64_t *pidx = std::get_if<std::int64_t>(&keyval))
       return eval_index(*pidx, data.as_array());
 
-    if (const std::uint64_t *pidx = keyval.if_uint64())
-      return eval_index(*pidx, data.as_array());
+    if (const std::uint64_t *puidx = std::get_if<std::uint64_t>(&keyval))
+      return eval_index(*puidx, data.as_array());
 
     throw std::logic_error{"jsonlogic - unsupported var access"};
   };
@@ -2937,7 +2974,7 @@ any_expr apply(json::value rule, json::value data) {
 }
 
 variable_accessor data_accessor(std::vector<value_variant> vars) {
-  return [vars = std::move(vars)](const json::value &, int idx) -> any_expr {
+  return [vars = std::move(vars)](value_variant, int idx) -> any_expr {
     if ((idx >= 0) && (std::size_t(idx) < vars.size())) {
       CXX_LIKELY;
       return to_expr(vars[idx]);
@@ -2951,16 +2988,82 @@ any_expr apply(const any_expr &exp, std::vector<value_variant> vars) {
   return jsonlogic::apply(exp, data_accessor(std::move(vars)));
 }
 
+
+std::ostream& operator<<(std::ostream& os, const value_variant& val)
+{
+    // \todo this is copied, and should be made more broadly available..
+  enum { mono_variant = 0,
+         null_variant = 1,
+         bool_variant = 2,
+         int_variant  = 3,
+         uint_variant = 4,
+         real_variant = 5,
+         strv_variant = 6,
+         json_variant = 7
+       };
+
+
+  switch (val.index()) {
+    case mono_variant: {
+      os << "<mono/unavail>";
+      break;
+    }
+
+    case null_variant: {
+      os << "null";
+      break;
+    }
+
+    case bool_variant: {
+      os << (std::get<bool>(val) ? "true" : "false");
+      break;
+    }
+
+    case int_variant: {
+      os << std::get<std::int64_t>(val);
+      break;
+    }
+
+    case uint_variant: {
+      os << std::get<std::uint64_t>(val);
+      break;
+    }
+
+    case real_variant: {
+      // print the double as json would print it so that strings
+      //   are comparable.
+      os << json::value(std::get<double>(val));
+      break;
+    }
+
+    case strv_variant: {
+      os << '"' << std::get<std::string_view>(val) << '"';
+      break;
+    }
+
+    case json_variant: {
+      os << std::get<boost::json::value>(val);
+      break;
+    }
+
+    default:
+      // did val hold a valid value?
+      os << "<error>";
+  }
+
+  return os;
+}
+
 namespace {
 
 struct value_printer : forwarding_visitor {
   explicit value_printer(std::ostream &stream) : os(stream) {}
 
-  void prn(json::value val) { os << val; }
+  void prn(value_variant val) { os << val; }
 
   void visit(const expr &) final { unsupported(); }
 
-  void visit(const value_base &n) final { prn(n.to_json()); }
+  void visit(const value_base &n) final { prn(n.to_variant()); }
 
   void visit(const array &n) final {
     bool first = true;
