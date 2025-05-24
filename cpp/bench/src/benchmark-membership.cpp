@@ -14,7 +14,7 @@ static const size_t HAYSTACK_RANGE_ = 1 << 18;
 static const size_t HAYSTACK_SZ_ = 100000;
 static const size_t N_ = 100000;
 static const int N_RUNS_ = 10;
-int main(int argc, const char **argv) {
+int main(int argc, const char **argv) try {
   std::span<const char *> args(argv, argc);
   size_t N = N_;
   if (argc > 1) {
@@ -127,4 +127,10 @@ int main(int argc, const char **argv) {
   jl_results.compare_to(cpp_results);
   cpp_results.compare_to(jl_results);
   return 0;
+} catch (const std::exception &e) {
+  std::cerr << "Fatal error: " << e.what() << '\n';
+  return 1;
+} catch (...) {
+  std::cerr << "Fatal unkown error\n";
+  return 2;
 }
