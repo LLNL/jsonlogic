@@ -126,18 +126,20 @@ static const int N_RUNS_ = 3;
 int main(int argc, const char **argv) {
 
   try {
+    std::span<const char *> args(argv, argc);
+
     size_t N = N_;
     if (argc > 1) {
-      N = std::stoul(argv[1]);
+      N = std::stoul(args[1]);
     }
     size_t N_RUNS = N_RUNS_;
     if (argc > 2) {
-      N_RUNS = std::stoul(argv[2]);
+      N_RUNS = std::stoul(args[2]);
     }
 
     size_t SEED = SEED_;
     if (argc > 3) {
-      SEED = std::stoul(argv[3]);
+      SEED = std::stoul(args[3]);
     }
 
     faker::getGenerator().seed(SEED);
