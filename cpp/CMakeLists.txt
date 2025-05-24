@@ -7,6 +7,9 @@
 cmake_minimum_required(VERSION 3.26)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# set(CMAKE_CXX_CLANG_TIDY "clang-tidy")
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 project( jsonlogic
          VERSION 0.2
@@ -37,13 +40,14 @@ FetchContent_MakeAvailable(Boost)
 option(JSONLOGIC_ENABLE_BENCH "Build the benchmark code" ON)
 option(JSONLOGIC_ENABLE_TESTS "Build the test code" ON)
 
-add_library(jsonlogic SHARED src/logic.cc)
-target_link_libraries(jsonlogic LINK_PUBLIC Boost::json)
-target_include_directories(jsonlogic PRIVATE include)
+
+add_library(jsonlogic SHARED ${CMAKE_SOURCE_DIR}/src/logic.cc)
+target_include_directories(jsonlogic PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_compile_options(jsonlogic PUBLIC -Wall -Wextra -pedantic)
 
+target_link_libraries(jsonlogic LINK_PUBLIC Boost::json)
 
-set_target_properties(jsonlogic PROPERTIES PUBLIC_HEADER include/jsonlogic/logic.hpp)
+set_target_properties(jsonlogic PROPERTIES PUBLIC_HEADER ${CMAKE_SOURCE_DIR}/include/jsonlogic/logic.hpp)
 set_target_properties(jsonlogic PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set_property(TARGET jsonlogic PROPERTY CXX_STANDARD 20)
 

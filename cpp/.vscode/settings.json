@@ -6,6 +6,15 @@
     },
     "cmake.generator": "Unix Makefiles",
     "clangd.arguments": [
-    "--compile-commands-dir=/workspaces/jsonlogic/cpp/build"
-  ]
+      "-j=4",
+      "--background-index",
+      "--compile-commands-dir=${workspaceFolder}/build",
+      "--clang-tidy",
+      "--completion-style=detailed"
+      // "--header-insertion=never"
+    ],
+
+  "C_Cpp.codeAnalysis.clangTidy.enabled": true,
+  "C_Cpp.codeAnalysis.clangTidy.path": "/usr/bin/clang-tidy",
+  "C_Cpp.codeAnalysis.clangTidy.useBuildPath": true,
 }

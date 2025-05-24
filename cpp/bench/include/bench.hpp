@@ -12,26 +12,27 @@
 #include <string>
 #include <vector>
 
-using BenchTiming = std::vector<double>;  // milliseconds
+using BenchTiming = std::vector<double>; // milliseconds
+using ChronoUnit = std::chrono::duration<double, std::milli>;
 
 class BenchmarkResult {
- public:
+public:
   BenchmarkResult() = default;
-  BenchmarkResult(const std::string& name, const BenchTiming& timing)
-      : name(name), timing(timing) {
-    sum = std::accumulate(timing.begin(), timing.end(), 0.0);
+  BenchmarkResult(std::string name, const BenchTiming &timing)
+      : name(std::move(name)), timing(timing),
+        sum(std::accumulate(timing.begin(), timing.end(), 0.0)) {
 
     if (timing.empty()) {
       mean = 0;
       stddev = 0;
     } else {
-      double mean_ = sum / timing.size();
+      double mean_ = sum / static_cast<double>(timing.size());
       stddev = std::sqrt(std::accumulate(timing.begin(), timing.end(), 0.0,
                                          [mean_](double acc, double val) {
-                                           return acc +
-                                                  (val - mean_) * (val - mean_);
+                                           return acc + ((val - mean_) *
+                                                         (val - mean_));
                                          }) /
-                         timing.size());
+                         static_cast<double>(timing.size()));
       mean = mean_;
     }
   }
@@ -49,7 +50,7 @@ class BenchmarkResult {
         timing.size(), sum, timing[0], timing[timing.size() - 1], mean, stddev);
   }
 
-  std::optional<double> compare_ratio(const BenchmarkResult& other) const {
+  std::optional<double> compare_ratio(const BenchmarkResult &other) const {
     if (timing.empty() || other.timing.empty()) {
       std::cerr << "No timing data available for comparison.\n";
       return std::nullopt;
@@ -63,7 +64,7 @@ class BenchmarkResult {
     return ratio;
   }
 
-  void compare_to(const BenchmarkResult& other) const {
+  void compare_to(const BenchmarkResult &other) const {
     std::optional<double> ratio = compare_ratio(other);
     if (!ratio) {
       std::cout << "No timing data available for comparison.\n";
@@ -83,37 +84,38 @@ class BenchmarkResult {
                              other.name, name, relation, rat);
   }
 
- private:
+private:
   std::string name;
   BenchTiming timing;
-  double sum;
-  double mean;
-  double stddev;
+  double sum = 0;
+  double mean = 0;
+  double stddev = 0;
 };
 
-template <typename F>
-class Benchmark {
- public:
-  Benchmark(const std::string& name, F func) : name(name), func(func) {}
+template <typename F> class Benchmark {
+public:
+  Benchmark(std::string name, F func, ChronoUnit addl_time = ChronoUnit{0})
+      : name(std::move(name)), func(func), addl_time(addl_time) {}
 
-  BenchmarkResult run(int n_runs, auto&&... args) {
+  BenchmarkResult run(size_t n_runs, auto &&...args) {
     BenchTiming timings;
     std::cout << "Running Benchmark " << name << ": " << n_runs << "\n";
-    for (int i = 0; i < n_runs; ++i) {
+    for (size_t i = 0; i < n_runs; ++i) {
       std::chrono::steady_clock::time_point start =
           std::chrono::steady_clock::now();
       func(args...);
       std::chrono::steady_clock::time_point end =
           std::chrono::steady_clock::now();
 
-      std::chrono::duration<double, std::milli> elapsed = end - start;
+      ChronoUnit elapsed = end - start + addl_time;
       timings.push_back(elapsed.count());
     }
-    std::sort(timings.begin(), timings.end());
+    std::ranges::sort(timings);
     return BenchmarkResult{name, timings};
   }
 
- private:
+private:
   std::string name;
   F func;
+  ChronoUnit addl_time;
 };

@@ -1,0 +1,1 @@
+{"rule":{"==":[{"var": "x"}, {"var": "x"}]}, "data": {"x": []}, "expected":false, "description": "Compare two empty variable arrays.", "nonstandard": false}
