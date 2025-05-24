@@ -1,0 +1,24 @@
+on:
+  push:
+    paths:
+      - 'cpp/**'
+  pull_request:
+    paths:
+      - 'cpp/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Build C++ code
+        working-directory: cpp
+        run: |
+          cmake --preset=default
+          cd build && make
+
+      - name: Test JL code
+        working-directory: cpp/build
+        run: make test
