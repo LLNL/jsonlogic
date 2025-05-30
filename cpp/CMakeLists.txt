@@ -39,6 +39,7 @@ FetchContent_MakeAvailable(Boost)
 
 option(JSONLOGIC_ENABLE_BENCH "Build the benchmark code" ON)
 option(JSONLOGIC_ENABLE_TESTS "Build the test code" ON)
+option(JSONLOGIC_ENABLE_PROFILE "Build the profile code" ON)
 
 
 add_library(jsonlogic SHARED ${CMAKE_SOURCE_DIR}/src/logic.cc)
@@ -63,6 +64,10 @@ endif()
 if(JSONLOGIC_ENABLE_TESTS)
     message(STATUS "Building tests: ${JSONLOGIC_ENABLE_TESTS}")
     add_subdirectory(tests)
+endif()
+if(JSONLOGIC_ENABLE_PROFILE)
+    message(STATUS "Building profile code: ${JSONLOGIC_ENABLE_PROFILE}")
+    add_subdirectory(profile)
 endif()
 
 add_custom_target(test
