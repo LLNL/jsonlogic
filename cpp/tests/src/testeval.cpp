@@ -168,7 +168,6 @@ jsonlogic::value_variant to_value_variant(const bjsn::value &n) {
     }
 
     default:
-      std::cerr << "Conversion Error: " << n << std::endl;
       throw std::runtime_error{"cannot convert"};
   }
 

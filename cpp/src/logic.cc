@@ -11,9 +11,7 @@
 #include <string>
 #include <unordered_map>
 #include <charconv>
-//~ #include <set>
-//~ #include <deque>
-#include <forward_list>
+#include <set> // alternatives are <deque>, <forward_list>
 
 #if WITH_JSON_LOGIC_CPP_EXTENSIONS
 #include <regex>
@@ -32,22 +30,24 @@ constexpr int COMPUTED_VARIABLE_NAME = -1;
 }  // namespace
 
 
-namespace {
-  // \TODO this is not thread safe and should be moved into an execution context
+namespace jsonlogic {
 
+namespace json = boost::json;
+
+/// type for string storage
+/// \note if the compiler uses small string optimization, we cannot
+///       use an std::vector because resizing invalidates the
+///       string_views.
+///       alternatives include forward_list or deque
+using string_table_base = std::set<std::string>;
+
+/// string table ensures lifetime of string exceeds lifetime of string_views
+struct string_table : private string_table_base
+{
   std::string_view safe_string(std::string v)
   {
-    // if the compiler uses small string optimization, we cannot
-    //   use an std::vector because resizing invalidates the
-    //   string_views.
-    static std::set<std::string> stringstore;
-
-    auto res = stringstore.emplace(std::move(v));
+    auto res = this->emplace(std::move(v));
     return *res.first;
-    //~ static std::forward_list<std::string> stringstore;
-
-    //~ stringstore.emplace_front(std::move(v));
-    //~ return stringstore.front();
   }
 
   template <class iterator>
@@ -55,11 +55,7 @@ namespace {
   {
     return safe_string(std::string(aa, zz));
   }
-}
-
-namespace jsonlogic {
-
-namespace json = boost::json;
+};
 
 namespace {
 CXX_NORETURN
@@ -329,46 +325,46 @@ std::vector<json::string> variable_map::to_vector() const {
 
 /// translates all children
 /// \{
-oper::container_type translate_children(json::array &children, variable_map &);
+oper::container_type translate_children(const json::array &children, variable_map &, string_table&);
 
-oper::container_type translate_children(json::value &n, variable_map &);
+oper::container_type translate_children(const json::value &n, variable_map &, string_table&);
 /// \}
 
 template <class ExprT>
-ExprT &mkOperator_(json::object &n, variable_map &m) {
+ExprT &mkOperator_(const json::object &n, variable_map &m, string_table& strings) {
   assert(n.size() == 1);
 
   ExprT &res = deref(new ExprT);
 
-  res.set_operands(translate_children(n.begin()->value(), m));
+  res.set_operands(translate_children(n.begin()->value(), m, strings));
   return res;
 }
 
 template <class ExprT>
-expr &mk_operator(json::object &n, variable_map &m) {
-  return mkOperator_<ExprT>(n, m);
+expr &mk_operator(const json::object &n, variable_map &m, string_table& strings) {
+  return mkOperator_<ExprT>(n, m, strings);
 }
 
 template <class ExprT>
-expr &mk_missing(json::object &n, variable_map &m) {
+expr &mk_missing(const json::object &n, variable_map &m, string_table& strings) {
   // \todo * extract variables from array and only setComputedVariables when
   // needed.
   //       * check reference implementation when missing is null
   m.setComputedVariables(true);
-  return mkOperator_<ExprT>(n, m);
+  return mkOperator_<ExprT>(n, m, strings);
 }
 
-expr &mk_variable(json::object &n, variable_map &m) {
-  var &v = mkOperator_<var>(n, m);
+expr &mk_variable(const json::object &n, variable_map &m, string_table& strings) {
+  var &v = mkOperator_<var>(n, m, strings);
 
   m.insert(v);
   return v;
 }
 
-array &mk_array(json::array &children, variable_map &m) {
+array &mk_array(const json::array &children, variable_map &m, string_table& strings) {
   array &res = deref(new array);
 
-  res.set_operands(translate_children(children, m));
+  res.set_operands(translate_children(children, m, strings));
   return res;
 }
 
@@ -380,16 +376,19 @@ value_t &mk_value(typename value_t::value_type n) {
 null_value &mk_null_value() { return deref(new null_value); }
 
 using dispatch_table =
-    std::map<json::string, expr &(*)(json::object &, variable_map &)>;
+    std::map<std::string_view, expr &(*)(const json::object &, variable_map &, string_table&)>;
 
 dispatch_table::const_iterator lookup(const dispatch_table &m,
                                       const json::object &op) {
   if (op.size() != 1) return m.end();
 
-  return m.find(op.begin()->key());
+  const json::string& key = op.begin()->key();
+  std::string_view    keyvw(&*key.begin(), key.size());
+
+  return m.find(keyvw);
 }
 
-any_expr translate_internal(json::value n, variable_map &varmap) {
+any_expr translate_internal(const json::value& n, variable_map &varmap, string_table &strings) {
   static const dispatch_table dt = {
       {"==", &mk_operator<equal>},
       {"===", &mk_operator<strict_equal>},
@@ -434,12 +433,12 @@ any_expr translate_internal(json::value n, variable_map &varmap) {
 
   switch (n.kind()) {
     case json::kind::object: {
-      json::object &obj = n.get_object();
+      const json::object &obj = n.get_object();
       dispatch_table::const_iterator pos = lookup(dt, obj);
 
       if (pos != dt.end()) {
         CXX_LIKELY;
-        res = &pos->second(obj, varmap);
+        res = &pos->second(obj, varmap, strings);
       } else {
         // does jsonlogic support value objects?
         unsupported();
@@ -450,12 +449,13 @@ any_expr translate_internal(json::value n, variable_map &varmap) {
 
     case json::kind::array: {
       // array is an operator that combines its subexpressions into an array
-      res = &mk_array(n.get_array(), varmap);
+      res = &mk_array(n.get_array(), varmap, strings);
       break;
     }
 
     case json::kind::string: {
-      res = &mk_value<string_value>(safe_string(n.get_string().begin(), n.get_string().end()));
+      const json::string& str = n.get_string();
+      res = &mk_value<string_value>(strings.safe_string(str.begin(), str.end()));
       break;
     }
 
@@ -491,34 +491,36 @@ any_expr translate_internal(json::value n, variable_map &varmap) {
   return any_expr(res);
 }
 
-oper::container_type translate_children(json::array &children,
-                                        variable_map &varmap) {
+oper::container_type translate_children(const json::array &children,
+                                        variable_map &varmap,
+                                        string_table& strings) {
   oper::container_type res;
 
   res.reserve(children.size());
 
-  for (json::value &elem : children)
-    res.emplace_back(translate_internal(elem, varmap));
+  for (const json::value &elem : children)
+    res.emplace_back(translate_internal(elem, varmap, strings));
 
   return res;
 }
 
-oper::container_type translate_children(json::value &n, variable_map &varmap) {
-  if (json::array *arr = n.if_array()) {
+oper::container_type translate_children(const json::value &n, variable_map &varmap, string_table& strings) {
+  if (const json::array *arr = n.if_array()) {
     CXX_LIKELY;
-    return translate_children(*arr, varmap);
+    return translate_children(*arr, varmap, strings);
   }
 
   oper::container_type res;
 
-  res.emplace_back(translate_internal(n, varmap));
+  res.emplace_back(translate_internal(n, varmap, strings));
   return res;
 }
 }  // namespace
 
-logic_rule_base create_logic(json::value n) {
+logic_rule_base create_logic(const json::value& n) {
+  static string_table strings;
   variable_map varmap;
-  any_expr node = translate_internal(std::move(n), varmap);
+  any_expr node = translate_internal(n, varmap, strings);
   bool hasComputedVariables = varmap.hasComputedVariables();
 
   return {std::move(node), varmap.to_vector(), hasComputedVariables};
@@ -534,9 +536,10 @@ any_expr to_expr(std::uint64_t val) {
   return any_expr(new unsigned_int_value(val));
 }
 any_expr to_expr(double val) { return any_expr(new real_value(val)); }
-any_expr to_expr(json::string val) {
-  return any_expr(new string_value(safe_string(val.begin(), val.end())));
-}
+//~ no longer supported
+//~ any_expr to_expr(json::string val) {
+  //~ return any_expr(new string_value(safe_string(val.begin(), val.end())));
+//~ }
 any_expr to_expr(std::string_view val) {
   return any_expr(new string_value(std::move(val)));
 }
@@ -558,7 +561,8 @@ any_expr to_expr(const json::value &n) {
 
   switch (n.kind()) {
     case json::kind::string: {
-      res = to_expr(n.get_string());
+      const json::string& str = n.get_string(); // \todo this may be unsafe..
+      res = to_expr(std::string_view(&*str.begin(), str.size()));
       break;
     }
 
@@ -770,18 +774,18 @@ inline double to_concrete(std::nullptr_t, const double &) { return 0; }
 /// conversion to string
 /// \{
 template <class Val>
-inline std::string_view to_concrete(Val v, const std::string_view &) {
-  return safe_string(std::to_string(v));
+inline std::string_view to_concrete(Val v, const std::string_view &, string_table& strings) {
+  return strings.safe_string(std::to_string(v));
 }
-inline std::string_view to_concrete(bool v, const std::string_view &) {
+inline std::string_view to_concrete(bool v, const std::string_view &, string_table&) {
   static constexpr const char* bool_string[] = {"false", "true"};
 
   return bool_string[v];
 }
-inline std::string_view to_concrete(const std::string_view &s, const std::string_view &) {
+inline std::string_view to_concrete(const std::string_view &s, const std::string_view &, string_table&) {
   return s;
 }
-inline std::string_view to_concrete(std::nullptr_t, const std::string_view &) {
+inline std::string_view to_concrete(std::nullptr_t, const std::string_view &, string_table&) {
   static constexpr const char* null_string = "null";
 
   return null_string;
@@ -806,6 +810,28 @@ inline bool to_concrete(const array &v, const bool &) {
   return v.num_evaluated_operands();
 }
 /// \}
+
+
+template <typename T, typename U, typename = void>
+struct to_concrete_nostrings : std::false_type {};
+
+template <typename T, typename U>
+struct to_concrete_nostrings<T, U, std::void_t<decltype(to_concrete(std::declval<T>(), std::declval<const U&>())) >>
+       : std::true_type {};
+
+//~ template< class T, class U> inline constexpr bool to_concrete_nostrings_v =
+          //~ to_concrete_nostrings<T, U>::value;
+
+template <class T, class U>
+U to_concrete_(T&& v, const U& u, string_table& strings)
+{
+  if constexpr (to_concrete_nostrings<T, U>::value)
+    return to_concrete(std::forward<T>(v), u);
+  else
+    return to_concrete(std::forward<T>(v), u, strings);
+}
+
+
 
 struct comparison_operator_base {
   enum {
@@ -1255,7 +1281,7 @@ struct array_operator {
   }
 */
 
-any_expr convert(any_expr val, const arithmetic_operator &) {
+any_expr convert(any_expr val, string_table&, const arithmetic_operator &) {
   struct arithmetic_converter : forwarding_visitor {
     explicit arithmetic_converter(any_expr val) : res(std::move(val)) {}
 
@@ -1345,9 +1371,9 @@ any_expr convert(any_expr val, const arithmetic_operator &) {
   }
 */
 
-any_expr convert(any_expr val, const string_operator_non_destructive &) {
+any_expr convert(any_expr val, string_table& strings, const string_operator_non_destructive &) {
   struct string_converter : forwarding_visitor {
-    explicit string_converter(any_expr val) : res(std::move(val)) {}
+    string_converter(any_expr val, string_table& strtab) : res(std::move(val)), strings(strtab) {}
 
     void visit(const expr &) final { throw_type_error(); }
 
@@ -1356,39 +1382,40 @@ any_expr convert(any_expr val, const string_operator_non_destructive &) {
 
     // need to convert values
     void visit(const bool_value &el) final {
-      res = to_expr(to_concrete(el.value(), std::string_view{}));
+      res = to_expr(to_concrete(el.value(), std::string_view{}, strings));
     }
 
     void visit(const int_value &el) final {
-      res = to_expr(to_concrete(el.value(), std::string_view{}));
+      res = to_expr(to_concrete(el.value(), std::string_view{}, strings));
     }
 
     void visit(const unsigned_int_value &el) final {
-      res = to_expr(to_concrete(el.value(), std::string_view{}));
+      res = to_expr(to_concrete(el.value(), std::string_view{}, strings));
     }
 
     void visit(const real_value &el) final {
-      res = to_expr(to_concrete(el.value(), std::string_view{}));
+      res = to_expr(to_concrete(el.value(), std::string_view{}, strings));
     }
 
     void visit(const null_value &el) final {
-      res = to_expr(to_concrete(el.value(), std::string_view{}));
+      res = to_expr(to_concrete(el.value(), std::string_view{}, strings));
     }
 
     any_expr result() && { return std::move(res); }
 
    private:
     any_expr res;
+    string_table& strings;
   };
 
   expr *node = val.get();
-  string_converter conv{std::move(val)};
+  string_converter conv{std::move(val), strings};
 
   node->accept(conv);
   return std::move(conv).result();
 }
 
-any_expr convert(any_expr val, const array_operator &) {
+any_expr convert(any_expr val, string_table&, const array_operator &) {
   struct array_converter : forwarding_visitor {
     explicit array_converter(any_expr val) : val(std::move(val)) {}
 
@@ -1434,11 +1461,17 @@ any_expr convert(any_expr val, const array_operator &) {
 
 template <class value_t>
 struct unpacker : forwarding_visitor {
+
+  explicit
+  unpacker(string_table& strtab)
+  : strings(strtab), res()
+  {}
+
   void assign(value_t &lhs, const value_t &val) { lhs = val; }
 
   template <class U>
   void assign(value_t &lhs, const U &val) {
-    lhs = to_concrete(val, lhs);
+    lhs = to_concrete_(val, lhs, strings);
   }
 
   CXX_NORETURN
@@ -1470,36 +1503,38 @@ struct unpacker : forwarding_visitor {
   value_t result() && { return std::move(res); }
 
  private:
+  string_table& strings;
   value_t res;
 };
 
 template <class T>
-T unpack_value(expr &expr) {
-  unpacker<T> unpack;
+T unpack_value(const expr &expr, string_table& strings) {
+  unpacker<T> unpack{strings};
 
   expr.accept(unpack);
   return std::move(unpack).result();
 }
 
 template <class T>
-T unpack_value(const any_expr &el) {
-  return unpack_value<T>(*el);
+T unpack_value(const any_expr &el, string_table& strings) {
+  return unpack_value<T>(*el, strings);
 }
 
-template <class T>
-T unpack_value(any_expr &&el) {
-  return unpack_value<T>(*el);
-}
 
 //
 // Json Logic - truthy/falsy
-bool truthy(expr &el) { return unpack_value<bool>(el); }
-bool truthy(any_expr &&el) { return unpack_value<bool>(std::move(el)); }
-bool falsy(expr &el) { return !truthy(el); }
+bool truthy(const expr &el)
+{
+  string_table tmp;
+
+  return unpack_value<bool>(el, tmp);
+}
+
+bool falsy(const expr &el) { return !truthy(el); }
 // bool falsy(any_expr&& el)  { return !truthy(std::move(el)); }
 }  // namespace
 
-bool truthy(const any_expr &el) { return unpack_value<bool>(el); }
+bool truthy(const any_expr &el) { return truthy(*el); }
 bool falsy(const any_expr &el) { return !truthy(el); }
 
 //
@@ -2162,16 +2197,23 @@ template <>
 struct operator_impl<cat> : string_operator_non_destructive {
   using string_operator_non_destructive::result_type;
 
+  explicit
+  operator_impl(string_table& strtab)
+  : string_operator_non_destructive(), strings(strtab)
+  {}
+
   result_type operator()(std::string_view lhs, std::string_view rhs) const {
-    json::string tmp;
+    std::string tmp;
 
     tmp.reserve(lhs.size() + rhs.size());
 
     tmp.append(lhs.begin(), lhs.end());
     tmp.append(rhs.begin(), rhs.end());
 
-    return to_expr(std::move(tmp));
+    return to_expr(strings.safe_string(std::move(tmp)));
   }
+
+  string_table& strings;
 };
 
 /// implements the string mode of the membership operator
@@ -2233,7 +2275,7 @@ struct operator_impl<merge> : array_operator {
 
 struct evaluator : forwarding_visitor {
   evaluator(variable_accessor varAccess, std::ostream &out)
-      : vars(std::move(varAccess)), logger(out), calcres(nullptr) {}
+      : vars(std::move(varAccess)), logger(out), calcres(nullptr), strings() {}
 
   void visit(const equal &) final;
   void visit(const strict_equal &) final;
@@ -2291,6 +2333,7 @@ struct evaluator : forwarding_visitor {
   variable_accessor vars;
   std::ostream &logger;
   any_expr calcres;
+  string_table strings;
 
   evaluator(const evaluator &) = delete;
   evaluator(evaluator &&) = delete;
@@ -2441,7 +2484,7 @@ value_t evaluator::unpack_optional_arg(const oper &n, int argpos,
     return defaultVal;
   }
 
-  return unpack_value<value_t>(*eval(n.operand(argpos)));
+  return unpack_value<value_t>(*eval(n.operand(argpos)), strings);
 }
 
 template <class unary_predicate_t>
@@ -2483,12 +2526,12 @@ void evaluator::reduce_sequence(const oper &n, binary_op_t op) {
   int idx = -1;
   any_expr res = eval(n.operand(++idx));
 
-  res = convert(std::move(res), op);
+  res = convert(std::move(res), strings, op);
 
   while (idx != (num - 1)) {
     any_expr rhs = eval(n.operand(++idx));
 
-    rhs = convert(std::move(rhs), op);
+    rhs = convert(std::move(rhs), strings, op);
     res = compute(res, rhs, op);
   }
 
@@ -2622,7 +2665,7 @@ void evaluator::visit(const max &n) {
 }
 
 void evaluator::visit(const cat &n) {
-  reduce_sequence(n, operator_impl<cat>{});
+  reduce_sequence(n, operator_impl<cat>{strings});
 }
 
 #if WITH_JSON_LOGIC_CPP_EXTENSIONS
@@ -2666,7 +2709,7 @@ void evaluator::visit(const membership &n) {
 void evaluator::visit(const substr &n) {
   assert(n.num_evaluated_operands() >= 1);
 
-  json::string str = unpack_value<json::string>(*eval(n.operand(0)));
+  std::string_view str = unpack_value<std::string_view>(*eval(n.operand(0)), strings);
   std::int64_t ofs = unpack_optional_arg<std::int64_t>(n, 1, 0);
   std::int64_t cnt = unpack_optional_arg<std::int64_t>(n, 2, 0);
 
@@ -2680,7 +2723,7 @@ void evaluator::visit(const substr &n) {
     cnt = std::max(std::int64_t(str.size()) - ofs + cnt, std::int64_t(0));
   }
 
-  calcres = to_expr(json::string{str.subview(ofs, cnt)});
+  calcres = to_expr(str.substr(ofs, cnt));
 }
 
 void evaluator::visit(const array &n) {
@@ -2861,7 +2904,7 @@ void evaluator::visit(const missing &n) {
 }
 
 void evaluator::visit(const missing_some &n) {
-  const std::uint64_t minreq = unpack_value<std::uint64_t>(eval(n.operand(0)));
+  const std::uint64_t minreq = unpack_value<std::uint64_t>(eval(n.operand(0)), strings);
   any_expr arr = eval(n.operand(1));
   array &elems = down_cast<array>(*arr);  // evaluated elements
   std::size_t avail = missing_aux(elems);

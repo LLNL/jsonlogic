@@ -33,7 +33,7 @@ using logic_rule_base = std::tuple<any_expr, std::vector<boost::json::string>, b
 /// interprets the json object \ref n as a jsonlogic expression and
 ///   returns a jsonlogic representation together with some information
 ///   on variables inside the jsonlogic expression.
-logic_rule_base create_logic(boost::json::value n);
+logic_rule_base create_logic(const boost::json::value& n);
 
 //
 // API to evaluate/apply an expression
@@ -125,7 +125,7 @@ any_expr to_expr(std::uint64_t val);
 any_expr to_expr(double val);
 any_expr to_expr(std::string_view val);
 any_expr to_expr(const boost::json::array &val);
-any_expr to_expr(boost::json::string val);
+// any_expr to_expr(boost::json::string val);
 /// \}
 
 /// creates a value representation for \p n in jsonlogic form.
