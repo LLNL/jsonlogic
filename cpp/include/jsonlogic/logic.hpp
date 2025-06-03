@@ -35,6 +35,9 @@ using logic_rule_base = std::tuple<any_expr, std::vector<boost::json::string>, b
 ///   on variables inside the jsonlogic expression.
 logic_rule_base create_logic(const boost::json::value& n);
 
+
+struct array;
+
 //
 // API to evaluate/apply an expression
 
@@ -55,6 +58,7 @@ using value_variant = std::variant< std::monostate,
                                     std::uint64_t,
                                     double,
                                     std::string_view,
+                                    array*,
                                     boost::json::value // fallback type
                                   >;
 
@@ -77,7 +81,7 @@ using value_variant = std::variant< std::monostate,
 ///     a string_view or std::variant<string_view, int ...> ..
 ///   * consider removing the limitation on any_expr being a value..
 using variable_accessor =
-    std::function<any_expr(value_variant, int)>;
+    std::function<value_variant(value_variant, int)>;
 
 /// evaluates \ref exp and uses \ref vars to query variables from
 ///   the context.
@@ -92,10 +96,10 @@ using variable_accessor =
 ///      throws a variable_resolution_error when a computed variable name
 ///      is requested.
 /// \{
-any_expr apply(const expr &exp, const variable_accessor &var_accessor);
-any_expr apply(const any_expr &exp, const variable_accessor &var_accessor);
-any_expr apply(const any_expr &exp);
-any_expr apply(const any_expr &exp, std::vector<value_variant> vars);
+value_variant apply(const expr &exp, const variable_accessor &var_accessor);
+value_variant apply(const any_expr &exp, const variable_accessor &var_accessor);
+value_variant apply(const any_expr &exp);
+value_variant apply(const any_expr &exp, std::vector<value_variant> vars);
 /// \}
 
 /// evaluates the rule \ref rule with the provided data \ref data.
@@ -107,7 +111,7 @@ any_expr apply(const any_expr &exp, std::vector<value_variant> vars);
 ///    converts rule to a jsonlogic expression and creates a variable_accessor
 ///    to query variables from data, before calling apply() on jsonlogic
 ///    expression.
-any_expr apply(boost::json::value rule, boost::json::value data);
+value_variant apply(boost::json::value rule, boost::json::value data);
 
 /// creates a variable accessor to access data in \ref data.
 variable_accessor data_accessor(boost::json::value data);
@@ -115,6 +119,7 @@ variable_accessor data_accessor(boost::json::value data);
 //
 // conversion functions
 
+#if 0
 /// creates a jsonlogic value representation for \ref val
 /// \post any_expr != nullptr
 /// \{
@@ -137,6 +142,7 @@ any_expr to_expr(const boost::json::value &n);
 
 /// creates a value representation for \p val in jsonlogic form.
 any_expr to_expr(value_variant val);
+#endif
 
 /// creates a json representation from \p e
 boost::json::value to_json(const any_expr &e);
@@ -153,7 +159,8 @@ bool falsy(const any_expr &el);
 
 /// prints out \p n to \p os
 /// \pre n must be a value
-std::ostream &operator<<(std::ostream &os, any_expr &n);
+// std::ostream &operator<<(std::ostream &os, any_expr &n);
+std::ostream &operator<<(std::ostream &os, value_variant &n);
 
 
 /// convenience class providing named accessors to logic_rule_base
@@ -184,18 +191,18 @@ struct logic_rule : logic_rule_base {
     /// evaluates the logic_rule.
     /// \return a jsonlogic value
     /// \throws variable_resolution_error when evaluation accesses a variable
-    any_expr apply() const;
+    value_variant apply() const;
 
     /// evaluates the logic_rule and uses \p var_accessor to query variables.
     /// \param var_accessor a variable accessor to retrieve variables from the context
     /// \return a jsonlogic value
-    any_expr apply(const variable_accessor &var_accessor) const;
+    value_variant apply(const variable_accessor &var_accessor) const;
 
     /// evaluates the logic_rule and uses \p vars to obtain values for non-computed variable names.
     /// \param  vars a variable array with values for non-computed variable names.
     /// \return a jsonlogic value
     /// \throws variable_resolution_error when evaluation accesses a computed variable name
-    any_expr apply(std::vector<value_variant> vars) const;
+    value_variant apply(std::vector<value_variant> vars) const;
 
   private:
     logic_rule()                             = delete;
