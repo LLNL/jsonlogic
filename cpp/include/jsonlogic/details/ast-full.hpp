@@ -167,8 +167,10 @@ struct modulo : oper_n<2> {
 
 // array
 
-// arrays serve a dual purpose
-//   they can be considered collections, but also an aggregate value.
+// arrays are considered collections of uninterpreted expressions.
+//   interpreted (evaluated) expressions are stored in a value_array.
+//   the distinction helps to avoid unnecessary copying and interpretation
+//   steps.
 // The class is final and it supports move ctor/assignment, so the data
 //   can move efficiently.
 struct array final : oper  // array is modeled as operator
@@ -180,15 +182,6 @@ struct array final : oper  // array is modeled as operator
   array(array &&);
   array &operator=(array &&);
 };
-
-array::array(array &&other) : oper() {
-  set_operands(std::move(other).move_operands());
-}
-
-array &array::operator=(array &&other) {
-  set_operands(std::move(other).move_operands());
-  return *this;
-}
 
 struct map : oper_n<2> {
   void accept(visitor &) const final;
@@ -236,6 +229,7 @@ private:
 /// in Calculator::visit(missing&) :
 ///   if the first argument is an array, only the array will be considered
 ///   otherwise all operands are treated as array.
+/// \{
 struct missing : oper {
   void accept(visitor &) const final;
 };
@@ -243,8 +237,10 @@ struct missing : oper {
 struct missing_some : oper_n<2> {
   void accept(visitor &) const final;
 };
+/// \}
 
-// string operations
+/// string operations
+/// \{
 struct cat : oper {
   void accept(visitor &) const final;
 };
@@ -252,13 +248,17 @@ struct cat : oper {
 struct substr : oper_n<3> {
   void accept(visitor &) const final;
 };
+/// \}
 
-// string and array operation implementing "in"
+/// string and array operation implementing "in"
 struct membership : oper {
   void accept(visitor &) const final;
 };
 
-// values
+/// value classes
+///   all but object_data are closely aligned with types listed value_variant.
+/// \todo consider using a single value_variant class...
+/// \{
 struct null_value : value_base {
   null_value() = default;
   null_value(std::nullptr_t) {}
@@ -298,8 +298,6 @@ struct real_value : value_generic<double> {
   void accept(visitor &) const final;
 };
 
-
-
 struct string_value : value_generic<std::string_view> {
   using base = value_generic<std::string_view>;
   using base::base;
@@ -307,6 +305,16 @@ struct string_value : value_generic<std::string_view> {
   void accept(visitor &) const final;
 };
 
+struct array_value : value_generic<value_variant_range>
+{
+  using base = value_generic<value_variant_range>;
+  using base::base;
+
+  void accept(visitor &) const final;
+};
+
+
+// object types do not seem to have strong support by jsonlogic
 using object_value_data = std::map<std::string_view, any_expr>;
 
 struct object_value : expr, private object_value_data {
@@ -328,12 +336,14 @@ struct object_value : expr, private object_value_data {
   void accept(visitor &) const final;
 };
 
-// logger
+/// \}
+
+/// logger
 struct log : oper_n<1> {
   void accept(visitor &) const final;
 };
 
-// error node
+/// error node
 struct error : expr {
   void accept(visitor &) const final;
 };
@@ -397,6 +407,7 @@ struct visitor {
   virtual void visit(const unsigned_int_value &) = 0;
   virtual void visit(const real_value &) = 0;
   virtual void visit(const string_value &) = 0;
+  virtual void visit(const array_value &) = 0;
   virtual void visit(const object_value &) = 0;
 
   virtual void visit(const error &) = 0;
@@ -480,6 +491,7 @@ struct generic_dispatcher : visitor {
   void visit(const unsigned_int_value &n) final { res = apply(n, &n); }
   void visit(const real_value &n) final { res = apply(n, &n); }
   void visit(const string_value &n) final { res = apply(n, &n); }
+  void visit(const array_value &n) final { res = apply(n, &n); }
   void visit(const object_value &n) final { res = apply(n, &n); }
 
   void visit(const error &n) final { res = apply(n, &n); }

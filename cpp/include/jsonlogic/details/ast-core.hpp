@@ -24,6 +24,6 @@ private:
 
 using any_expr = std::unique_ptr<expr>;
 
-std::ostream &operator<<(std::ostream &os, any_expr &n);
+// std::ostream &operator<<(std::ostream &os, any_expr &n);
 
 } // namespace jsonlogic

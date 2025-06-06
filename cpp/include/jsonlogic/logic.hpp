@@ -36,31 +36,46 @@ using logic_rule_base = std::tuple<any_expr, std::vector<boost::json::string>, b
 logic_rule_base create_logic(const boost::json::value& n);
 
 
-struct array;
-
 //
 // API to evaluate/apply an expression
+struct value_variant;
+
+using value_variant_range_base = std::tuple<const value_variant*, const value_variant*>;
+
+struct value_variant_range : value_variant_range_base
+{
+  using base = value_variant_range_base;
+  using base::base;
+
+  const value_variant* begin() const { return std::get<0>(*this); }
+  const value_variant* end()   const { return std::get<1>(*this); }
+  std::size_t          size()  const { return std::distance(begin(), end()); }
+};
 
 /// a type representing views on value types in jsonlogic
 /// \details
-///    (1) the variant contains options for all primitive types.
+///    (1) the variant contains options for all primitive types + strings and arrays.
 ///    (2) some rules treat the absence of a value differently from a null value
-///    (3) boost::json::value is a fallback type that is used if one of
-///        the following conditions is true:
-///        - represent a value with compound type such as an array or object
-///        - represent a string value for which it cannot be guaranteed that the
-///          original string outlives the string_view
-///        \todo consider using an any_expr as fallback type
-using value_variant = std::variant< std::monostate,
-                                    std::nullptr_t,
-                                    bool,
-                                    std::int64_t,
-                                    std::uint64_t,
-                                    double,
-                                    std::string_view,
-                                    array*,
-                                    boost::json::value // fallback type
-                                  >;
+///    \todo describe lifetime requirements
+using value_variant_base = std::variant< std::monostate,
+                                         std::nullptr_t,
+                                         bool,
+                                         std::int64_t,
+                                         std::uint64_t,
+                                         double,
+                                         std::string_view,
+                                         value_variant_range
+                                         // boost::json::value // fallback type
+                                       >;
+
+struct value_variant : value_variant_base {
+  using base = value_variant_base;
+  using base::base;
+
+  ~value_variant();
+};
+
+bool operator==(const value_variant& lhs, const value_variant& rhs);
 
 
 
@@ -152,15 +167,15 @@ boost::json::value to_json(const any_expr &e);
 ///    truthy performs the appropriate type conversions
 ///    but does not evaluate \p el, in case it is a
 ///    jsonlogic expression.
-bool truthy(const any_expr &el);
+bool truthy(const value_variant &el);
 
 /// returns true if \p el is !truthy
-bool falsy(const any_expr &el);
+bool falsy(const value_variant &el);
 
 /// prints out \p n to \p os
 /// \pre n must be a value
 // std::ostream &operator<<(std::ostream &os, any_expr &n);
-std::ostream &operator<<(std::ostream &os, value_variant &n);
+std::ostream &operator<<(std::ostream &os, const value_variant &n);
 
 
 /// convenience class providing named accessors to logic_rule_base

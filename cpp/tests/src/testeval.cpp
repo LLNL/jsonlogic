@@ -175,7 +175,7 @@ jsonlogic::value_variant to_value_variant(const bjsn::value &n) {
   return res;
 }
 
-jsonlogic::any_expr call_apply(settings &config, const bjsn::value &rule,
+jsonlogic::value_variant call_apply(settings &config, const bjsn::value &rule,
                                const bjsn::value &data) {
   using value_vector = std::vector<jsonlogic::value_variant>;
 
@@ -276,7 +276,7 @@ int main(int argc, const char **argv) {
     dat.emplace_object();
 
   try {
-    jsonlogic::any_expr res = call_apply(config, rule, dat);
+    jsonlogic::value_variant res = call_apply(config, rule, dat);
 
     if (config.verbose)
       std::cerr << res << std::endl;
