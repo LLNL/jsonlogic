@@ -38,19 +38,8 @@ logic_rule_base create_logic(const boost::json::value& n);
 
 //
 // API to evaluate/apply an expression
-struct value_variant;
 
-using value_variant_range_base = std::tuple<const value_variant*, const value_variant*>;
-
-struct value_variant_range : value_variant_range_base
-{
-  using base = value_variant_range_base;
-  using base::base;
-
-  const value_variant* begin() const { return std::get<0>(*this); }
-  const value_variant* end()   const { return std::get<1>(*this); }
-  std::size_t          size()  const { return std::distance(begin(), end()); }
-};
+struct array_value;
 
 /// a type representing views on value types in jsonlogic
 /// \details
@@ -64,13 +53,22 @@ using value_variant_base = std::variant< std::monostate,
                                          std::uint64_t,
                                          double,
                                          std::string_view,
-                                         value_variant_range
-                                         // boost::json::value // fallback type
+                                         array_value const*
+                                         // boost::json::value // fallback type; may not be needed..
                                        >;
 
 struct value_variant : value_variant_base {
   using base = value_variant_base;
   using base::base;
+
+  value_variant()
+  : base(std::monostate{})
+  {}
+
+  value_variant(const value_variant&);
+  value_variant(value_variant&&);
+  value_variant& operator=(const value_variant&);
+  value_variant& operator=(value_variant&&);
 
   ~value_variant();
 };

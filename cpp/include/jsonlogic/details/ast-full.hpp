@@ -305,12 +305,39 @@ struct string_value : value_generic<std::string_view> {
   void accept(visitor &) const final;
 };
 
-struct array_value : value_generic<value_variant_range>
+struct array_value : value_base
 {
-  using base = value_generic<value_variant_range>;
-  using base::base;
+    array_value()                          = default;
+    ~array_value()                         = default;
 
-  void accept(visitor &) const final;
+    array_value(array_value&&)             = default;
+    array_value& operator=(array_value&&)  = default;
+
+    explicit
+    array_value(std::vector<value_variant>&& elems)
+    : val(std::move(elems))
+    {}
+
+    explicit
+    array_value(const std::vector<value_variant>& elems)
+    : val(elems)
+    {}
+
+    value_variant      to_variant() const { return this; } // \todo maybe this should copy or throw
+
+    std::vector<value_variant> const& elements() const { return val; }
+    std::vector<value_variant>&       elements()       { return val; }
+    std::vector<value_variant> const& value()    const { return val; }
+
+    std::size_t size() const { return val.size(); }
+
+    void accept(visitor &) const final;
+
+  private:
+    std::vector<value_variant> val;
+
+    array_value(const array_value&)             = delete;
+    array_value& operator=(const array_value&)  = delete;
 };
 
 
