@@ -53,8 +53,8 @@ target_link_libraries(jl-bench-eq PRIVATE jsonlogic faker-cxx ${CMAKE_DL_LIBS})
 add_executable(jl-bench-membership src/benchmark-membership.cpp)
 target_compile_options(jl-bench-membership PRIVATE -O3)
 target_include_directories(jl-bench-membership SYSTEM PRIVATE
-    ${CMAKE_SOURCE_DIR}/bench/include
-    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../bench/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
 
 # target_include_directories(jl-bench-membership SYSTEM PRIVATE
