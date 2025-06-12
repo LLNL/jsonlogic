@@ -17,8 +17,8 @@ message(STATUS, "bench: CMAKE_SOURCE_DIR = ${CMAKE_SOURCE_DIR}")
 
 target_compile_options(jl-bench-eq PRIVATE -O3)
 target_include_directories(jl-bench-eq SYSTEM PRIVATE
-    ${CMAKE_SOURCE_DIR}/bench/include
-    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../bench/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
 
 # target_include_directories(jl-bench-eq SYSTEM PRIVATE
