@@ -2,6 +2,7 @@
 
 # project(jl-bench-eqs)
 
+# set(CMAKE_BUILD_TYPE Debug)
 set(BUILD_TESTING OFF) # Disable Faker tests
 FetchContent_Declare(faker
     GIT_REPOSITORY https://github.com/cieslarmichal/faker-cxx.git
@@ -57,8 +58,18 @@ target_include_directories(jl-bench-membership SYSTEM PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
 
+target_link_libraries(jl-bench-membership PRIVATE jsonlogic faker-cxx)
+
 # target_include_directories(jl-bench-membership SYSTEM PRIVATE
 #     ${CMAKE_BINARY_DIR}/_deps/faker-src/include
 # )
 
-target_link_libraries(jl-bench-membership PRIVATE jsonlogic faker-cxx)
+add_executable(jl-bench-complex1 src/benchmark-complex1.cpp)
+target_compile_options(jl-bench-complex1 PRIVATE -O3)
+target_include_directories(jl-bench-complex1 SYSTEM PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../bench/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+configure_file(${CMAKE_SOURCE_DIR}/bench/src/complex1.json ${CMAKE_BINARY_DIR}/bench/complex1.json COPYONLY)
+target_link_libraries(jl-bench-complex1 PRIVATE jsonlogic faker-cxx)
