@@ -6,15 +6,19 @@
 		"dockerfile": "Dockerfile"
 	},
 	"workspaceFolder": "/workspaces/jsonlogic/cpp",
-	"mounts": [
-    	"source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached"
-	],
- 	"postStartCommand": "chmod 700 ~/.ssh && chmod 600 ~/.ssh/*",
+	// "mounts": [
+    // 	"source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached"
+	// ],
+ 	// "postStartCommand": "chmod 700 ~/.ssh && chmod 600 ~/.ssh/*",
 
-        "extensions": [
-            "llvm-vs-code-extensions.vscode-clangd",
-            // add other extensions as needed
-        ]
+		"customizations": {
+			"vscode": {
+				"extensions": [
+					"llvm-vs-code-extensions.vscode-clangd"
+					// add other extensions as needed
+				]
+			}
+		}
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
 
