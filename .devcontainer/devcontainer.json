@@ -6,9 +6,9 @@
 		"dockerfile": "Dockerfile"
 	},
 	"workspaceFolder": "/workspaces/jsonlogic/cpp",
-	"mounts": [
-    	"source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached"
-	],
+	// "mounts": [
+    // 	"source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached"
+	// ],
  	// "postStartCommand": "chmod 700 ~/.ssh && chmod 600 ~/.ssh/*",
 
 		"customizations": {
