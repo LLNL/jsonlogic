@@ -11,10 +11,14 @@
 	],
  	"postStartCommand": "chmod 700 ~/.ssh && chmod 600 ~/.ssh/*",
 
-        "extensions": [
-            "llvm-vs-code-extensions.vscode-clangd",
-            // add other extensions as needed
-        ]
+		"customizations": {
+			"vscode": {
+				"extensions": [
+					"llvm-vs-code-extensions.vscode-clangd"
+					// add other extensions as needed
+				]
+			}
+		},
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
 
