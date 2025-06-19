@@ -12,7 +12,7 @@
         "JSONLOGIC_ENABLE_TESTS": "ON"
       },
       "generator": "Unix Makefiles",
-      "binaryDir": "${sourceDir}/build"
+      "binaryDir": "${sourceDir}/build/release"
     },
     {
       "name": "debug",
@@ -25,7 +25,7 @@
         "JSONLOGIC_ENABLE_TESTS": "ON"
       },
       "generator": "Unix Makefiles",
-      "binaryDir": "${sourceDir}/build-debug"
+      "binaryDir": "${sourceDir}/build/debug"
     },
 
     {
@@ -39,7 +39,7 @@
         "JSONLOGIC_ENABLE_TESTS": "ON"
       },
       "generator": "Unix Makefiles",
-      "binaryDir": "${sourceDir}/build-relwithdebinfo"
+      "binaryDir": "${sourceDir}/build/relwithdebinfo"
     }
   ],
   "buildPresets": [

@@ -5,7 +5,7 @@
             "name": "Debug Benchmark",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build-debug/bench/${input:benchmarkExecutable}",
+            "program": "${workspaceFolder}/build/debug/bench/${input:benchmarkExecutable}",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

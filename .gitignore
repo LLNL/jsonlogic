@@ -1,7 +1,6 @@
-.vscode-old/
 .DS_Store
 CMakeFiles/
-build/
+**/build/
 .cache/
 CMakeCache.txt
 Makefile
@@ -9,7 +8,6 @@ Makefile
 *.so
 testeval.bin
 __pycache__
-**/build*
 venv
 *.core
 setup.cfg
