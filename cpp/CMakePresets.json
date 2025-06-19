@@ -1,13 +1,88 @@
 {
-  "version": 2,
+  "version": 3,
   "configurePresets": [
     {
       "name": "default",
+      "displayName": "Default Release",
+      "description": "Default release configuration",
       "cacheVariables": {
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_BUILD_TYPE": "Release",
+        "JSONLOGIC_ENABLE_BENCH": "ON",
+        "JSONLOGIC_ENABLE_TESTS": "ON"
       },
       "generator": "Unix Makefiles",
       "binaryDir": "${sourceDir}/build"
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "description": "Debug configuration for development and debugging",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "JSONLOGIC_ENABLE_BENCH": "ON",
+        "JSONLOGIC_ENABLE_TESTS": "ON"
+      },
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-debug"
+    },
+
+    {
+      "name": "relwithdebinfo",
+      "displayName": "Release with Debug Info",
+      "description": "Optimized build with debug symbols for profiling benchmarks",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "JSONLOGIC_ENABLE_BENCH": "ON",
+        "JSONLOGIC_ENABLE_TESTS": "ON"
+      },
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-relwithdebinfo"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "displayName": "Build Default",
+      "configurePreset": "default"
+    },
+    {
+      "name": "debug",
+      "displayName": "Build Debug",
+      "configurePreset": "debug"
+    },
+
+    {
+      "name": "relwithdebinfo",
+      "displayName": "Build Release with Debug Info",
+      "configurePreset": "relwithdebinfo"
+    },
+    {
+      "name": "benchmarks-debug",
+      "displayName": "Build Benchmarks (Debug)",
+      "configurePreset": "debug",
+      "targets": ["jsonlogic"]
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "default",
+      "displayName": "Default Tests",
+      "configurePreset": "default",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug Tests",
+      "configurePreset": "debug",
+      "output": {
+        "outputOnFailure": true,
+        "verbosity": "verbose"
+      }
     }
   ]
 }
