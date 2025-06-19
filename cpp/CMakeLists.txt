@@ -62,6 +62,15 @@ if(JSONLOGIC_ENABLE_BENCH)
 endif()
 if(JSONLOGIC_ENABLE_TESTS)
     message(STATUS "Building tests: ${JSONLOGIC_ENABLE_TESTS}")
-    enable_testing()
+    include(CTest)
+    
+    # Enable parallel testing by default
+    include(ProcessorCount)
+    ProcessorCount(N)
+    if(NOT N EQUAL 0)
+        set(CTEST_BUILD_FLAGS -j${N})
+        set(ctest_test_args ${ctest_test_args} PARALLEL_LEVEL ${N})
+    endif()
+    
     add_subdirectory(tests)
 endif()
