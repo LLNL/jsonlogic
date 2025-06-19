@@ -62,11 +62,6 @@ if(JSONLOGIC_ENABLE_BENCH)
 endif()
 if(JSONLOGIC_ENABLE_TESTS)
     message(STATUS "Building tests: ${JSONLOGIC_ENABLE_TESTS}")
+    enable_testing()
     add_subdirectory(tests)
 endif()
-
-add_custom_target(test
-    COMMAND ${CMAKE_COMMAND} -E env bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-tests.sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/json
-    COMMENT "Running tests with run_tests.sh"
-)
-add_dependencies(test testeval)
