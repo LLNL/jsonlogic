@@ -18,7 +18,7 @@ function run {
 
 # test using apply(rule, variant_vector) 
 #      with apply(rule, data) as fallback
-TESTBIN="../build/tests/testeval"
+TESTBIN="./tests/testeval"
 run
 
 # test using always apply(rule, data)
