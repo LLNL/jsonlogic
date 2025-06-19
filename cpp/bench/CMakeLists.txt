@@ -73,3 +73,13 @@ target_include_directories(jl-bench-complex1 SYSTEM PRIVATE
 
 configure_file(${CMAKE_SOURCE_DIR}/bench/src/complex1.json ${CMAKE_BINARY_DIR}/bench/complex1.json COPYONLY)
 target_link_libraries(jl-bench-complex1 PRIVATE jsonlogic faker-cxx)
+
+add_executable(jl-bench-simple-and src/benchmark-simple-and.cpp)
+target_compile_options(jl-bench-simple-and PRIVATE -O3)
+target_include_directories(jl-bench-simple-and SYSTEM PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../bench/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+configure_file(${CMAKE_SOURCE_DIR}/bench/src/simple-and.json ${CMAKE_BINARY_DIR}/bench/simple-and.json COPYONLY)
+target_link_libraries(jl-bench-simple-and PRIVATE jsonlogic faker-cxx)
