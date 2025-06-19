@@ -1,20 +1,45 @@
 {
-    "C_Cpp.files.exclude": {
-        "**/.vscode": true,
-        "**/.vs": true,
-        "**/_deps/**": true
-    },
+    // Project-specific C++ configuration
+    "C_Cpp.intelliSenseEngine": "disabled",
+    
+    // CMake configuration for this project
     "cmake.generator": "Unix Makefiles",
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    
+    // Clangd configuration specific to this project
     "clangd.arguments": [
-      "-j=4",
-      "--background-index",
-      "--compile-commands-dir=${workspaceFolder}/build",
-      "--clang-tidy",
-      "--completion-style=detailed"
-      // "--header-insertion=never"
+        "-j=4",
+        "--background-index",
+        "--compile-commands-dir=${workspaceFolder}/build",
+        "--clang-tidy",
+        "--completion-style=detailed",
+        "--header-insertion=iwyu",
+        "--pch-storage=memory",
+        "--all-scopes-completion",
+        "--suggest-missing-includes",
+        "--cross-file-rename",
+        "--function-arg-placeholders"
     ],
-
-  "C_Cpp.codeAnalysis.clangTidy.enabled": true,
-  "C_Cpp.codeAnalysis.clangTidy.path": "/usr/bin/clang-tidy",
-  "C_Cpp.codeAnalysis.clangTidy.useBuildPath": true,
+    
+    // Project-specific search exclusions
+    "search.exclude": {
+        "**/build/**": true,
+        "**/build-*/**": true
+    },
+    
+    // Project-specific file watcher exclusions
+    "files.watcherExclude": {
+        "**/build/**": true,
+        "**/build-*/**": true
+    },
+    
+    // Project-specific spell checker words
+    "cSpell.words": [
+        "jsonlogic",
+        "faker",
+        "boost",
+        "cmake",
+        "clangd",
+        "truthy"
+    ]
 }
