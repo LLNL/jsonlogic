@@ -22,7 +22,7 @@ TESTBIN="../build/tests/testeval"
 run
 
 # test using always apply(rule, data)
-TESTBIN="../build/tests/testeval -s"
+TESTBIN="./tests/testeval -s"
 run
 
 echo "All tests passed."
