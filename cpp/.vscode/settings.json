@@ -4,13 +4,13 @@
     
     // CMake configuration for this project
     "cmake.generator": "Unix Makefiles",
-    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "cmake.buildDirectory": "${workspaceFolder}/build/release",
     
     // Clangd configuration specific to this project
     "clangd.arguments": [
         "-j=4",
         "--background-index",
-        "--compile-commands-dir=${workspaceFolder}/build",
+        "--compile-commands-dir=${workspaceFolder}",
         "--clang-tidy",
         "--completion-style=detailed",
         "--header-insertion=iwyu",
@@ -23,14 +23,12 @@
     
     // Project-specific search exclusions
     "search.exclude": {
-        "**/build/**": true,
-        "**/build-*/**": true
+        "**/build/**": true
     },
     
     // Project-specific file watcher exclusions
     "files.watcherExclude": {
-        "**/build/**": true,
-        "**/build-*/**": true
+        "**/build/**": true
     },
     
     // Project-specific spell checker words
