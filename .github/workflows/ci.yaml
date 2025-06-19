@@ -17,8 +17,8 @@ jobs:
         working-directory: cpp
         run: |
           cmake --preset=default
-          cd build && make
+          cd build/release && make
 
       - name: Test JL code
-        working-directory: cpp/build
+        working-directory: cpp/build/release
         run: make test
