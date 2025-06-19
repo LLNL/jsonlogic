@@ -10,7 +10,7 @@
     "clangd.arguments": [
         "-j=4",
         "--background-index",
-        "--compile-commands-dir=${workspaceFolder}",
+        "--compile-commands-dir=${workspaceFolder}/build",
         "--clang-tidy",
         "--completion-style=detailed",
         "--header-insertion=iwyu",
