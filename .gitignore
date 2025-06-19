@@ -9,10 +9,9 @@ Makefile
 *.so
 testeval.bin
 __pycache__
-**/build
+**/build*
 venv
 *.core
-build
 setup.cfg
 *.egg-info
 .coverage
