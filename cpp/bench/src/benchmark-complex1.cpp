@@ -91,6 +91,7 @@ int main(int argc, const char **argv) try {
   // Create jsonlogic benchmark
   auto jv_xy = boost::json::parse(expr);
   boost::json::object data_obj;
+  jsonlogic::logic_rule rule = jsonlogic::create_logic(jv_xy);
 
   size_t matches = 0;
   auto jl_lambda = [&] {
@@ -99,8 +100,8 @@ int main(int argc, const char **argv) try {
       data_obj["x"] = xs[i];
       data_obj["y"] = ys[i];
       data_obj["z"] = zs[i];
-      auto data = boost::json::value_from(data_obj);
-      auto v_xy = jsonlogic::apply(jv_xy, data);
+      auto varaccess = jsonlogic::json_accessor(boost::json::value_from(data_obj));
+      auto v_xy = rule.apply(varaccess);
 
       bool val = jsonlogic::truthy(v_xy);
 
@@ -116,9 +117,9 @@ int main(int argc, const char **argv) try {
 
   auto jl2_lambda = [&] {
     matches = 0;
-    auto [rule, ignore1, igmore2] = jsonlogic::create_logic(jv_xy);
+    jsonlogic::logic_rule rule = jsonlogic::create_logic(jv_xy);
     for (size_t i = 0; i < N; ++i) {
-      auto v_xy = jsonlogic::apply(rule, {xs[i], ys[i], zs[i]});
+      auto v_xy = rule.apply({xs[i], ys[i], zs[i]});
       bool val = jsonlogic::truthy(v_xy);
 
       if (val) {

@@ -179,10 +179,13 @@ jsonlogic::value_variant call_apply(settings &config, const bjsn::value &rule,
                                const bjsn::value &data) {
   using value_vector = std::vector<jsonlogic::value_variant>;
 
-  if (config.simple_apply)
-    return jsonlogic::apply(rule, data);
-
   jsonlogic::logic_rule logic = jsonlogic::create_logic(rule);
+
+  if (config.simple_apply)
+  {
+    // simple_apply currently not supported; just call apply..
+    return logic.apply(jsonlogic::json_accessor(data));
+  }
 
   if (!logic.has_computed_variable_names()) {
     if (config.verbose)
@@ -207,7 +210,7 @@ jsonlogic::value_variant call_apply(settings &config, const bjsn::value &rule,
   if (config.verbose)
     std::cerr << "falling back to normal apply" << std::endl;
 
-  return logic.apply(jsonlogic::data_accessor(data));
+  return logic.apply(jsonlogic::json_accessor(data));
 }
 
 int main(int argc, const char **argv) {

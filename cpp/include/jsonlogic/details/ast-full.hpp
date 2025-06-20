@@ -1,10 +1,11 @@
 #pragma once
 
-#include <boost/json.hpp>
+#include <memory>
 #include <map>
+#include <set>
 #include <vector>
+#include <iosfwd>
 
-#include "ast-core.hpp"
 #include "cxx-compat.hpp"
 
 #if !defined(WITH_JSONLOGIC_EXTENSIONS)
@@ -12,6 +13,26 @@
 #endif /* !defined(WITH_JSONLOGIC_EXTENSIONS) */
 
 namespace jsonlogic {
+
+struct visitor;
+
+// the root class
+struct expr {
+  expr() = default;
+  virtual ~expr() = default;
+
+  virtual void accept(visitor &) const = 0;
+
+private:
+  expr(expr &&) = delete;
+  expr(const expr &) = delete;
+  expr &operator=(expr &&) = delete;
+  expr &operator=(const expr &) = delete;
+};
+
+using any_expr = std::unique_ptr<expr>;
+
+
 struct oper : expr, private std::vector<any_expr> {
   using container_type = std::vector<any_expr>;
 
@@ -557,4 +578,59 @@ auto generic_visit(ast_functor fn, ast_node *n, arguments... args)
   n->accept(disp);
   return std::move(disp).result();
 }
+
+
+//
+// logic internal data
+
+/// type for string storage
+/// \note if the compiler uses small string optimization, we cannot
+///       use an std::vector because resizing invalidates the
+///       string_views.
+///       alternatives include forward_list or deque
+using string_table_base = std::set<std::string>;
+
+/// string table ensures lifetime of string exceeds lifetime of string_views
+struct string_table : private string_table_base
+{
+  using string_table_base::size;
+
+  std::string_view safe_string(std::string v)
+  {
+    auto res = this->emplace(std::move(v));
+    return *res.first;
+  }
+
+  template <class iterator>
+  std::string_view safe_string(iterator aa, iterator zz)
+  {
+    return safe_string(std::string(aa, zz));
+  }
+};
+
+
+using logic_data_base = std::tuple<any_expr, std::vector<std::string_view>, string_table, bool>;
+struct logic_data : logic_data_base
+{
+  using base = logic_data_base;
+  using base::base;
+
+  /// returns the logic expression
+  any_expr const &syntax_tree() const { return std::get<0>(*this); }
+
+  /// returns static variable names (i.e., variable names that are not computed)
+  std::vector<std::string_view> const &variable_names() const { return std::get<1>(*this); }
+
+  /// returns the string table
+  string_table&       strings()       { return std::get<2>(*this); }
+  string_table const& strings() const { return std::get<2>(*this); }
+
+  /// returns if the expression contains computed names.
+  bool has_computed_variable_names() const { return std::get<3>(*this); }
+};
+
+
+
+
+
 }  // namespace jsonlogic

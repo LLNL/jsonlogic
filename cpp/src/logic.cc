@@ -33,6 +33,14 @@ constexpr int COMPUTED_VARIABLE_NAME = -1;
 
 namespace jsonlogic {
 
+struct empty_string_table : string_table {
+  ~empty_string_table() {
+    // make sure that no string was allocated
+    assert(size() == 0);
+  }
+};
+
+
 namespace {
 CXX_NORETURN
 void unsupported() {
@@ -371,29 +379,6 @@ value_variant& value_variant::operator=(value_variant&& other)
 
 
 
-/// type for string storage
-/// \note if the compiler uses small string optimization, we cannot
-///       use an std::vector because resizing invalidates the
-///       string_views.
-///       alternatives include forward_list or deque
-using string_table_base = std::set<std::string>;
-
-/// string table ensures lifetime of string exceeds lifetime of string_views
-struct string_table : private string_table_base
-{
-  std::string_view safe_string(std::string v)
-  {
-    auto res = this->emplace(std::move(v));
-    return *res.first;
-  }
-
-  template <class iterator>
-  std::string_view safe_string(iterator aa, iterator zz)
-  {
-    return safe_string(std::string(aa, zz));
-  }
-};
-
 
 //
 // AST class implementation
@@ -544,16 +529,16 @@ namespace {
 
 struct variable_map {
   void insert(var &el);
-  std::vector<json::string> to_vector() const;
+  std::vector<std::string_view> to_vector() const;
 
   /// accessors for withComputedNames
   /// \{
   bool hasComputedVariables() const { return withComputedNames; }
-  void setComputedVariables(bool b) { withComputedNames = b; }
+  void set_computed_variables(bool b) { withComputedNames = b; }
   /// \}
 
  private:
-  using container_type = std::map<json::string, int>;
+  using container_type = std::map<std::string_view, int>;
 
   container_type mapping = {};
   bool withComputedNames = false;
@@ -567,20 +552,23 @@ void variable_map::insert(var &var) {
                        str.value().find('[') != json::string::npos);
 
     if (comp) {
-      setComputedVariables(true);
+      set_computed_variables(true);
     } else if (str.value() != "") {
-      // do nothing for free variables in "lambdas"
       auto [pos, success] = mapping.emplace(str.value(), mapping.size());
 
       var.num(pos->second);
     }
+    else
+    {
+      // do nothing for free variables in "lambdas"
+    }
   } catch (const type_error &) {
-    setComputedVariables(true);
+    set_computed_variables(true);
   }
 }
 
-std::vector<json::string> variable_map::to_vector() const {
-  std::vector<json::string> res;
+std::vector<std::string_view> variable_map::to_vector() const {
+  std::vector<std::string_view> res;
 
   res.resize(mapping.size());
 
@@ -600,7 +588,7 @@ oper::container_type translate_children(const json::value &n, variable_map &, st
 array& mk_array()     { return deref(new array); }
 
 template <class ExprT>
-ExprT &mkOperator_(const json::object &n, variable_map &m, string_table& strings) {
+ExprT &mk_operator_(const json::object &n, variable_map &m, string_table& strings) {
   assert(n.size() == 1);
 
   ExprT &res = deref(new ExprT);
@@ -611,20 +599,20 @@ ExprT &mkOperator_(const json::object &n, variable_map &m, string_table& strings
 
 template <class ExprT>
 expr &mk_operator(const json::object &n, variable_map &m, string_table& strings) {
-  return mkOperator_<ExprT>(n, m, strings);
+  return mk_operator_<ExprT>(n, m, strings);
 }
 
 template <class ExprT>
 expr &mk_missing(const json::object &n, variable_map &m, string_table& strings) {
-  // \todo * extract variables from array and only setComputedVariables when
+  // \todo * extract variables from array and only set_computed_variables when
   // needed.
   //       * check reference implementation when missing is null
-  m.setComputedVariables(true);
-  return mkOperator_<ExprT>(n, m, strings);
+  m.set_computed_variables(true);
+  return mk_operator_<ExprT>(n, m, strings);
 }
 
 expr &mk_variable(const json::object &n, variable_map &m, string_table& strings) {
-  var &v = mkOperator_<var>(n, m, strings);
+  var &v = mk_operator_<var>(n, m, strings);
 
   m.insert(v);
   return v;
@@ -786,14 +774,17 @@ oper::container_type translate_children(const json::value &n, variable_map &varm
 }
 }  // namespace
 
-logic_rule_base create_logic(const json::value& n) {
-  static string_table strings;
+
+logic_rule create_logic(const json::value& n) {
+  string_table strings;
   variable_map varmap;
   any_expr node = translate_internal(n, varmap, strings);
-  bool hasComputedVariables = varmap.hasComputedVariables();
+  bool const hasComputedVariables = varmap.hasComputedVariables();
 
-  return {std::move(node), varmap.to_vector(), hasComputedVariables};
+  return logic_rule(std::make_unique<logic_data>(std::move(node), varmap.to_vector(), std::move(strings), hasComputedVariables));
 }
+
+
 
 //
 // to value_base conversion
@@ -1634,22 +1625,11 @@ T unpack_value(any_value el, string_table& strings) {
 
 //
 // Json Logic - truthy/falsy
-/*
-bool truthy(const expr &el)
-{
-  string_table tmp;
-
-  return unpack_value<bool>(el, tmp);
-}
-
-bool falsy(const expr &el) { return !truthy(el); }
-// bool falsy(any_expr&& el)  { return !truthy(std::move(el)); }
-*/
 
 
 bool truthy(const any_value &el)
 {
-  string_table tmp; // will not be used
+  empty_string_table tmp; // will not be used
 
   return unpack_value<bool>(el, tmp);
 }
@@ -2376,8 +2356,8 @@ struct operator_impl<merge> : array_operator {
 };
 
 struct evaluator : forwarding_visitor {
-  evaluator(variable_accessor varAccess, std::ostream &out)
-      : vars(std::move(varAccess)), logger(out), calcres(nullptr), strings() {}
+  evaluator(variable_accessor varAccess, string_table& string_store, std::ostream &out)
+      : vars(std::move(varAccess)), logger(out), strings(string_store), calcres(nullptr) {}
 
   void visit(const equal &) final;
   void visit(const strict_equal &) final;
@@ -2433,9 +2413,9 @@ struct evaluator : forwarding_visitor {
 
  private:
   variable_accessor vars;
-  std::ostream &logger;
+  std::ostream& logger;
+  string_table& strings;
   any_value calcres;
-  string_table strings;
 
   evaluator(const evaluator &) = delete;
   evaluator(evaluator &&) = delete;
@@ -2481,8 +2461,8 @@ struct evaluator : forwarding_visitor {
 };
 
 struct sequence_function {
-  sequence_function(const expr &e, std::ostream &logstream)
-      : exp(e), logger(logstream) {}
+  sequence_function(const expr &e, string_table& string_store, std::ostream &logstream)
+      : exp(e), strings(string_store), logger(logstream) {}
 
   any_value operator()(const any_value &elem) const {
     evaluator sub{[&elem](value_variant keyval, int) -> any_value {
@@ -2502,6 +2482,7 @@ struct sequence_function {
 
                     return nullptr;
                   },
+                  strings,
                   logger};
 
     return sub.eval(exp);
@@ -2509,6 +2490,7 @@ struct sequence_function {
 
  private:
   const expr &exp;
+  string_table& strings;
   std::ostream &logger;
 };
 
@@ -2543,8 +2525,8 @@ struct sequence_predicate_nondestructive : sequence_function {
 */
 
 struct sequence_reduction {
-  sequence_reduction(expr &e, std::ostream &logstream)
-      : exp(e), logger(logstream) {}
+  sequence_reduction(expr &e, string_table& string_store, std::ostream &logstream)
+      : exp(e), strings(string_store), logger(logstream) {}
 
   any_value operator()(any_value accu, any_value elem) const {
     evaluator sub{[&accu, &elem](value_variant keyval, int) -> any_value {
@@ -2555,6 +2537,7 @@ struct sequence_reduction {
                     }
                     return to_value(nullptr);
                   },
+                  strings,
                   logger};
 
     return sub.eval(exp);
@@ -2562,6 +2545,7 @@ struct sequence_reduction {
 
  private:
   expr &exp;
+  string_table& strings;
   std::ostream &logger;
 };
 
@@ -2572,7 +2556,7 @@ std::int64_t evaluator::unpack_optional_int_arg(const oper &n, int argpos,
     return defaultVal;
   }
 
-  string_table tmp; // will not be used
+  empty_string_table tmp; // will not be used
 
   return unpack_value<std::int64_t>(eval(n.operand(argpos)), tmp);
 }
@@ -2827,11 +2811,12 @@ void evaluator::visit(const reduce &n) {
   expr &expr = n.operand(1);
   any_value accu = eval(n.operand(2));
 
-  auto op = [&expr, accu, calclogger = &this->logger](array_value const* v) -> any_value {
+  auto op = [&expr, accu, string_store = &this->strings, calclogger = &this->logger]
+            (array_value const* v) -> any_value {
     variant_span spn = element_range(v);
     return std::accumulate( spn.begin(), spn.end(),
                             std::move(accu),
-                            sequence_reduction{expr, *calclogger}
+                            sequence_reduction{expr, *string_store, *calclogger}
                           );
   };
 
@@ -2845,8 +2830,8 @@ empty_array_value() { return new array_value; }
 
 void evaluator::visit(const map &n) {
   any_value arr = eval(n.operand(0));
-  auto mapper = [&n, &arr,
-                 calclogger = &this->logger](array_value const* v) -> array_value const* {
+  auto mapper = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
+                 (array_value const* v) -> array_value const* {
     variant_span spn = element_range(v);
     expr &expr = n.operand(1);
     std::vector<any_value> mapped_elements;
@@ -2855,7 +2840,7 @@ void evaluator::visit(const map &n) {
 
     std::transform(spn.begin(), spn.end(),
                    std::back_inserter(mapped_elements),
-                   sequence_function{expr, *calclogger});
+                   sequence_function{expr, *string_store, *calclogger});
 
     return new array_value{std::move(mapped_elements)};
   };
@@ -2865,8 +2850,8 @@ void evaluator::visit(const map &n) {
 
 void evaluator::visit(const filter &n) {
   any_value arr = eval(n.operand(0));
-  auto filter = [&n, &arr,
-                 calclogger = &this->logger](array_value const* v) -> array_value const* {
+  auto filter = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
+                (array_value const* v) -> array_value const* {
     variant_span spn = element_range(v);
     expr &expr = n.operand(1);
     std::vector<any_value> filtered_elements;
@@ -2874,7 +2859,7 @@ void evaluator::visit(const filter &n) {
     // non destructive predicate is required for evaluating and copying
     std::copy_if(spn.begin(), spn.end(),
                  std::back_inserter(filtered_elements),
-                 sequence_predicate_nondestructive{expr, *calclogger});
+                 sequence_predicate_nondestructive{expr, *string_store, *calclogger});
 
     return new array_value{std::move(filtered_elements)};
   };
@@ -2885,13 +2870,13 @@ void evaluator::visit(const filter &n) {
 void evaluator::visit(const all &n) {
   any_value arr = eval(n.operand(0));
 
-  auto all_of = [&n, &arr,
-                 calclogger = &this->logger](array_value const* v) -> bool {
+  auto all_of = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
+                (array_value const* v) -> bool {
     variant_span spn = element_range(v);
     expr &expr = n.operand(1);
 
     return std::all_of( spn.begin(), spn.end(),
-                        sequence_predicate{expr, *calclogger}
+                        sequence_predicate{expr, *string_store, *calclogger}
                       );
   };
 
@@ -2903,13 +2888,13 @@ void evaluator::visit(const all &n) {
 void evaluator::visit(const none &n) {
   any_value arr = eval(n.operand(0));
 
-  auto none_of = [&n, &arr,
-                 calclogger = &this->logger](array_value const* v) -> bool {
+  auto none_of = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
+                 (array_value const* v) -> bool {
     variant_span spn = element_range(v);
     expr &expr = n.operand(1);
 
     return std::none_of( spn.begin(), spn.end(),
-                         sequence_predicate{expr, *calclogger}
+                         sequence_predicate{expr, *string_store, *calclogger}
                        );
   };
 
@@ -2921,13 +2906,13 @@ void evaluator::visit(const none &n) {
 void evaluator::visit(const some &n) {
   any_value arr = eval(n.operand(0));
 
-  auto any_of = [&n, &arr,
-                 calclogger = &this->logger](array_value const* v) -> bool {
+  auto any_of = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
+                (array_value const* v) -> bool {
     variant_span spn = element_range(v);
     expr &expr = n.operand(1);
 
     return std::any_of( spn.begin(), spn.end(),
-                        sequence_predicate{expr, *calclogger}
+                        sequence_predicate{expr, *string_store, *calclogger}
                       );
   };
 
@@ -3070,26 +3055,32 @@ any_value eval_index(IntT idx, const json::array &arr) {
   return jsonlogic::to_value(arr[idx]);
 }
 
-}  // namespace
 
-any_value apply(expr &exp, const variable_accessor &vars) {
-  evaluator ev{vars, std::cerr};
+
+any_value apply(const expr &exp, string_table& strings, const variable_accessor &vars) {
+  evaluator ev{vars, strings, std::cerr};
 
   return ev.eval(exp);
 }
 
-any_value apply(const any_expr &exp, const variable_accessor &vars) {
-  assert(exp.get());
-  return apply(*exp, vars);
+any_value apply(logic_data& rule, const variable_accessor &vars) {
+  assert(rule.syntax_tree().get());
+  return apply(*rule.syntax_tree(), rule.strings(), vars);
 }
 
-any_value apply(const any_expr &exp) {
-  return jsonlogic::apply(exp, [](value_variant, int) -> any_value {
-    throw std::logic_error{"variable accessor not available"};
-  });
+any_value apply(logic_data& rule) {
+  auto no_variables = [](value_variant, int) -> any_value { throw std::logic_error{"variable accessor not available"}; };
+
+  return jsonlogic::apply(rule, no_variables);
 }
 
-variable_accessor data_accessor(json::value data) {
+any_value apply(logic_data& rule, std::vector<value_variant> vars) {
+  return jsonlogic::apply(rule, variant_accessor(std::move(vars)));
+}
+
+}  // namespace
+
+variable_accessor json_accessor(json::value data) {
   return [data = std::move(data)](value_variant keyval, int) -> any_value {
     if (const std::string_view *ppath = std::get_if<std::string_view>(&keyval)) {
       //~ std::cerr << *ppath << std::endl;
@@ -3107,13 +3098,7 @@ variable_accessor data_accessor(json::value data) {
   };
 }
 
-any_value apply(json::value rule, json::value data) {
-  logic_rule logic(create_logic(rule));
-
-  return jsonlogic::apply(logic.syntax_tree(), data_accessor(std::move(data)));
-}
-
-variable_accessor data_accessor(std::vector<value_variant> vars) {
+variable_accessor variant_accessor(std::vector<value_variant> vars) {
   return [vars = std::move(vars)](value_variant, int idx) -> any_value {
     if ((idx >= 0) && (std::size_t(idx) < vars.size())) {
       CXX_LIKELY;
@@ -3124,9 +3109,6 @@ variable_accessor data_accessor(std::vector<value_variant> vars) {
   };
 }
 
-any_value apply(const any_expr &exp, std::vector<value_variant> vars) {
-  return jsonlogic::apply(exp, data_accessor(std::move(vars)));
-}
 
 
 std::ostream& operator<<(std::ostream& os, const value_variant& val)
@@ -3231,26 +3213,35 @@ std::ostream &operator<<(std::ostream &os, any_expr &n) {
 expr &oper::operand(int n) const { return deref(this->at(n).get()); }
 
 //
-// json_logic_rule
+// logic_rule
 
-any_expr const &logic_rule::syntax_tree() const { return std::get<0>(*this); }
+logic_rule::logic_rule(std::unique_ptr<logic_data>&& rule_data)
+: data(std::move(rule_data))
+{}
 
-std::vector<boost::json::string> const &logic_rule::variable_names() const {
-  return std::get<1>(*this);
+logic_rule::logic_rule(logic_rule&&)            = default;
+logic_rule& logic_rule::operator=(logic_rule&&) = default;
+logic_rule::~logic_rule()                       = default;
+
+logic_data& logic_rule::internal_data() { return *data; }
+
+std::vector<std::string_view> const &logic_rule::variable_names() const {
+  return data->variable_names();
 }
 
 bool logic_rule::has_computed_variable_names() const {
-  return std::get<2>(*this);
+  return data->has_computed_variable_names();
 }
 
-any_value logic_rule::apply() const { return jsonlogic::apply(syntax_tree()); }
+any_value logic_rule::apply() { return jsonlogic::apply(*data); }
 
-any_value logic_rule::apply(const variable_accessor &var_accessor) const {
-  return jsonlogic::apply(syntax_tree(), var_accessor);
+
+any_value logic_rule::apply(const variable_accessor &var_accessor) {
+  return jsonlogic::apply(*data, var_accessor);
 }
 
-any_value logic_rule::apply(std::vector<value_variant> vars) const {
-  return jsonlogic::apply(syntax_tree(), std::move(vars));
+any_value logic_rule::apply(std::vector<value_variant> vars)  {
+  return jsonlogic::apply(*data, std::move(vars));
 }
 
 }  // namespace jsonlogic
