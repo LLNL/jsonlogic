@@ -21,16 +21,16 @@
                 },
                 {
                     "description": "Add safe path for auto-loading debug build",
-                    "text": "add-auto-load-safe-path ${workspaceFolder}/build-debug",
+                    "text": "add-auto-load-safe-path ${workspaceFolder}/build/debug",
                     "ignoreFailures": true
                 }
             ]
         },
         {
-            "name": "Profile Benchmark (RelWithDebInfo)",
+            "name": "Profile Benchmark (Release)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build-relwithdebinfo/bench/${input:benchmarkExecutable}",
+            "program": "${workspaceFolder}/build/release/bench/${input:benchmarkExecutable}",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -45,8 +45,8 @@
                     "ignoreFailures": true
                 },
                 {
-                    "description": "Add safe path for auto-loading RelWithDebInfo build",
-                    "text": "add-auto-load-safe-path ${workspaceFolder}/build-relwithdebinfo",
+                    "description": "Add safe path for auto-loading release build",
+                    "text": "add-auto-load-safe-path ${workspaceFolder}/build/release",
                     "ignoreFailures": true
                 }
             ]
@@ -55,7 +55,7 @@
             "name": "Debug Test",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build-debug/tests/${input:testExecutable}",
+            "program": "${workspaceFolder}/build/debug/tests/${input:testExecutable}",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -71,7 +71,7 @@
                 },
                 {
                     "description": "Add safe path for auto-loading debug build",
-                    "text": "add-auto-load-safe-path ${workspaceFolder}/build-debug",
+                    "text": "add-auto-load-safe-path ${workspaceFolder}/build/debug",
                     "ignoreFailures": true
                 }
             ]
@@ -95,8 +95,7 @@
             "description": "Select test executable",
             "type": "pickString",
             "options": [
-                "testeval",
-                "unit_tests"
+                "testeval"
             ]
         }
     ]

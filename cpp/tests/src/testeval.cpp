@@ -2,11 +2,12 @@
 #include <boost/json/src.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/range/adaptor/transformed.hpp>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
-#include <sstream>
-
 #include <jsonlogic/logic.hpp>
+#include <sstream>
+#include <vector>
 
 enum class ResultStatus : std::uint8_t {
   NoError = 0,  // no error
@@ -105,9 +106,11 @@ bool matchOpt0(const std::vector<std::string> &args, N &pos,
 }
 
 template <class N, class Fn>
-bool noSwitch0(const std::vector<std::string> &args, N &pos, Fn /*fn*/) {
-  //~ if (fn(args[pos]))
-  //~ return true;
+bool noSwitch0(const std::vector<std::string> &args, N &pos, Fn fn) {
+  if (fn(args[pos])) {
+    ++pos;
+    return true;
+  }
 
   std::cerr << "unrecognized argument: " << args[pos] << std::endl;
   ++pos;
@@ -254,7 +257,10 @@ int main(int argc, const char **argv) {
     exit(1);
   }
 
-  bjsn::value all = parseStream(std::cin);
+  bjsn::value all = config.filename.empty() ? parseStream(std::cin)
+                                            : parseFile(config.filename);
+
+  // parseStream(config.filename.empty() ? std::cin : config.filename);
   bjsn::object &allobj = all.as_object();
 
   bjsn::value rule = allobj["rule"];
