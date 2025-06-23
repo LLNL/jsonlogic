@@ -5,6 +5,7 @@
 #include <set>
 #include <vector>
 #include <iosfwd>
+#include <iostream>
 
 #include "cxx-compat.hpp"
 
@@ -18,20 +19,17 @@ struct visitor;
 
 // the root class
 struct expr {
-  expr() = default;
-  virtual ~expr() = default;
+  virtual ~expr()               = default;
+  expr()                        = default;
+  expr(expr &&)                 = default;
+  expr(const expr &)            = default;
+  expr &operator=(expr &&)      = default;
+  expr &operator=(const expr &) = default;
 
   virtual void accept(visitor &) const = 0;
-
-private:
-  expr(expr &&) = delete;
-  expr(const expr &) = delete;
-  expr &operator=(expr &&) = delete;
-  expr &operator=(const expr &) = delete;
 };
 
 using any_expr = std::unique_ptr<expr>;
-
 
 struct oper : expr, private std::vector<any_expr> {
   using container_type = std::vector<any_expr>;
@@ -51,6 +49,8 @@ struct oper : expr, private std::vector<any_expr> {
   using container_type::reverse_iterator;
   using container_type::size;
 
+  oper() = default;
+
   // convenience function so that the constructor does not need to be
   // implemented in every derived class.
   void set_operands(container_type &&opers) { this->swap(opers); }
@@ -62,6 +62,12 @@ struct oper : expr, private std::vector<any_expr> {
   expr &operand(int n) const;
 
   virtual int num_evaluated_operands() const;
+
+  private:
+    oper(oper &&)                 = delete;
+    oper(const oper &)            = delete;
+    oper &operator=(oper &&)      = delete;
+    oper &operator=(const oper &) = delete;
 };
 
 // defines operators that have an upper bound on how many
@@ -326,41 +332,75 @@ struct string_value : value_generic<std::string_view> {
   void accept(visitor &) const final;
 };
 
-struct array_value : value_base
+// \todo most likely not needed, so this can be removed
+struct array_value_base : value_base
 {
-    array_value()                          = default;
-    ~array_value()                         = default;
+  using container_type = std::vector<value_variant>;
 
-    array_value(array_value&&)             = default;
-    array_value& operator=(array_value&&)  = default;
+  ~array_value_base()                                   = default;
+  array_value_base()                                    = default;
+  array_value_base(array_value_base&&)                  = default;
+  array_value_base(const array_value_base&)             = default;
+  array_value_base& operator=(array_value_base&&)       = default;
+  array_value_base& operator=(const array_value_base&)  = default;
+
+  virtual container_type const& value() const  = 0;
+  virtual const array_value_base* copy() const = 0;
+
+  value_variant to_variant() const final { return this; }
+};
+
+struct array_value : array_value_base
+{
+    using container_type = array_value_base::container_type;
+
+    ~array_value()                               = default;
+    array_value(array_value&&)                  = default;
+    array_value& operator=(array_value&&)       = default;
+    array_value(const array_value&)             = default;
+    array_value& operator=(const array_value&)  = default;
+
 
     explicit
-    array_value(std::vector<value_variant>&& elems)
-    : val(std::move(elems))
+    array_value(container_type elems)
+    : vec(std::make_shared<container_type>(std::move(elems)))
     {}
 
-    explicit
-    array_value(const std::vector<value_variant>& elems)
-    : val(elems)
-    {}
-
-    value_variant      to_variant() const { return this; } // \todo maybe this should copy or throw
-
-    std::vector<value_variant> const& elements() const { return val; }
-    std::vector<value_variant>&       elements()       { return val; }
-    std::vector<value_variant> const& value()    const { return val; }
-
-    std::size_t size() const { return val.size(); }
-
+    container_type const& value() const final;
+    const array_value* copy() const final;
     void accept(visitor &) const final;
 
   private:
-    std::vector<value_variant> val;
+    const std::shared_ptr<container_type> vec;
 
-    array_value(const array_value&)             = delete;
-    array_value& operator=(const array_value&)  = delete;
+    array_value()                                = delete;
 };
 
+#if 0
+// an internal class that
+struct array_view : array_value_base
+{
+    using container_type = array_value_base::container_type;
+
+    ~array_view()                            { std::cerr << "view" << std::endl; }
+    array_view(array_view&&)                 = default;
+    array_view(const array_view&)            = default;
+    array_view& operator=(array_view&&)      = default;
+    array_view& operator=(const array_view&) = default;
+
+    array_view(const array_value& arrval)
+    : arr(arrval)
+    {}
+
+    container_type const& value() const final;
+    const array_view* copy() const final;
+    void accept(visitor &) const final;
+
+  private:
+    const array_value& arr;
+};
+
+#endif
 
 // object types do not seem to have strong support by jsonlogic
 using object_value_data = std::map<std::string_view, any_expr>;
@@ -455,7 +495,9 @@ struct visitor {
   virtual void visit(const unsigned_int_value &) = 0;
   virtual void visit(const real_value &) = 0;
   virtual void visit(const string_value &) = 0;
+  virtual void visit(const array_value_base &) = 0;
   virtual void visit(const array_value &) = 0;
+  //~ virtual void visit(const array_view &) = 0;
   virtual void visit(const object_value &) = 0;
 
   virtual void visit(const error &) = 0;
@@ -540,6 +582,8 @@ struct generic_dispatcher : visitor {
   void visit(const real_value &n) final { res = apply(n, &n); }
   void visit(const string_value &n) final { res = apply(n, &n); }
   void visit(const array_value &n) final { res = apply(n, &n); }
+  //~ void visit(const array_view &n) final { res = apply(n, &n); }
+  void visit(const array_value_base &n) final { res = apply(n, &n); }
   void visit(const object_value &n) final { res = apply(n, &n); }
 
   void visit(const error &n) final { res = apply(n, &n); }
@@ -593,19 +637,30 @@ using string_table_base = std::set<std::string>;
 /// string table ensures lifetime of string exceeds lifetime of string_views
 struct string_table : private string_table_base
 {
-  using string_table_base::size;
+    using string_table_base::size;
 
-  std::string_view safe_string(std::string v)
-  {
-    auto res = this->emplace(std::move(v));
-    return *res.first;
-  }
+    string_table()                               = default;
+    ~string_table()                              = default;
+    string_table(string_table&&)                 = default;
+    string_table& operator=(string_table&&)      = default;
 
-  template <class iterator>
-  std::string_view safe_string(iterator aa, iterator zz)
-  {
-    return safe_string(std::string(aa, zz));
-  }
+    std::string_view safe_string(std::string v)
+    {
+      auto emplaced = this->emplace(std::move(v));
+
+      std::string_view res = *emplaced.first;
+      return res;
+    }
+
+    template <class iterator>
+    std::string_view safe_string(iterator aa, iterator zz)
+    {
+      return safe_string(std::string(aa, zz));
+    }
+
+  private:
+    string_table(const string_table&)            = delete;
+    string_table& operator=(const string_table&) = delete;
 };
 
 

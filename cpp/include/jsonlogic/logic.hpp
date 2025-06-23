@@ -26,22 +26,21 @@ struct variable_resolution_error : std::runtime_error {
 //
 // API to evaluate/apply an expression
 
-struct array_value;
+struct array_value_base;
 
 /// a type representing views on value types in jsonlogic
 /// \details
 ///    (1) the variant contains options for all primitive types + strings and arrays.
 ///    (2) some rules treat the absence of a value differently from a null value
-///    \todo describe lifetime requirements
-using value_variant_base = std::variant< std::monostate,
-                                         std::nullptr_t,
+///    \todo document lifetime requirements
+using value_variant_base = std::variant< std::monostate, // not available
+                                         std::nullptr_t, // value is null
                                          bool,
                                          std::int64_t,
                                          std::uint64_t,
                                          double,
                                          std::string_view,
-                                         array_value const*
-                                         // boost::json::value // fallback type; may not be needed..
+                                         array_value_base const*
                                        >;
 
 struct value_variant : value_variant_base {

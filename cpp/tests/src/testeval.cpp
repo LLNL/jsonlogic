@@ -175,7 +175,15 @@ jsonlogic::value_variant to_value_variant(const bjsn::value &n) {
   return res;
 }
 
-jsonlogic::value_variant call_apply(settings &config, const bjsn::value &rule,
+std::string variant_to_string(const jsonlogic::value_variant& val)
+{
+  std::stringstream os;
+
+  os << val;
+  return os.str();
+}
+
+std::string call_apply(settings &config, const bjsn::value &rule,
                                const bjsn::value &data) {
   using value_vector = std::vector<jsonlogic::value_variant>;
 
@@ -184,7 +192,7 @@ jsonlogic::value_variant call_apply(settings &config, const bjsn::value &rule,
   if (config.simple_apply)
   {
     // simple_apply currently not supported; just call apply..
-    return logic.apply(jsonlogic::json_accessor(data));
+    return variant_to_string(logic.apply(jsonlogic::json_accessor(data)));
   }
 
   if (!logic.has_computed_variable_names()) {
@@ -202,7 +210,7 @@ jsonlogic::value_variant call_apply(settings &config, const bjsn::value &rule,
           logic.variable_names() | boost::adaptors::transformed(value_maker);
 
       // NOTE: data's lifetime must extend beyond the call to apply.
-      return logic.apply(value_vector(varvalues.begin(), varvalues.end()));
+      return variant_to_string(logic.apply(value_vector(varvalues.begin(), varvalues.end())));
     } catch (...) {
     }
   }
@@ -210,7 +218,7 @@ jsonlogic::value_variant call_apply(settings &config, const bjsn::value &rule,
   if (config.verbose)
     std::cerr << "falling back to normal apply" << std::endl;
 
-  return logic.apply(jsonlogic::json_accessor(data));
+  return variant_to_string(logic.apply(jsonlogic::json_accessor(data)));
 }
 
 int main(int argc, const char **argv) {
@@ -279,7 +287,7 @@ int main(int argc, const char **argv) {
     dat.emplace_object();
 
   try {
-    jsonlogic::value_variant res = call_apply(config, rule, dat);
+    std::string res = call_apply(config, rule, dat);
 
     if (config.verbose)
       std::cerr << res << std::endl;
@@ -296,7 +304,6 @@ int main(int argc, const char **argv) {
 
     result_matches_expected = expStream.str() == resStream.str();
     resultStatus = ResultStatus::NoError;
-
   } catch (const std::exception &ex) {
     resultStatus = ResultStatus::Error;
     resultError = ex.what();
