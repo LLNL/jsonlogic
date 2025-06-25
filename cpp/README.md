@@ -8,9 +8,20 @@ The library is designed to follow the type conversion rules of the reference Jso
 ## Compile and Install
 
 The library can be installed using cmake. From the top-level directory,
-    cmake --preset=default
-    cd build/release
-    make
+```
+cmake --preset=default
+cd build/release
+make
+```
+Benchmarks can be made with
+```
+make bench
+```
+
+Tests can be run with
+```
+make testeval && make test
+```
 
 ## Use
 
