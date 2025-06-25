@@ -59,6 +59,9 @@ install(FILES include/jsonlogic/details/ast-full.hpp DESTINATION "include/jsonlo
 if(JSONLOGIC_ENABLE_BENCH)
     message(STATUS "Building benchmarks: ${JSONLOGIC_ENABLE_BENCH}")
     add_subdirectory(bench)
+    add_custom_target(bench
+        DEPENDS jl-bench-eq jl-bench-membership jl-bench-generic
+    )
 endif()
 if(JSONLOGIC_ENABLE_TESTS)
     message(STATUS "Building tests: ${JSONLOGIC_ENABLE_TESTS}")
