@@ -14,3 +14,4 @@ venv
 setup.cfg
 *.egg-info
 .coverage
+.vscode/settings.json
