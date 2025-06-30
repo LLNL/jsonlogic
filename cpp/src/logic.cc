@@ -54,14 +54,17 @@ struct empty_string_table : string_table {
 
 namespace {
 CXX_NORETURN
+inline
 void unsupported() {
   throw std::logic_error("functionality not yet implemented");
 }
 
 CXX_NORETURN
+inline
 void throw_type_error() { throw type_error("typing error"); }
 
 CXX_NORETURN
+inline
 void implementation_error() { throw std::logic_error("implementation error"); }
 
 template <class Error = std::runtime_error, class T>
@@ -171,7 +174,7 @@ static_assert(std::is_same_v<double,
                              std::variant_alternative_t<real_variant, value_variant_base> >);
 static_assert(std::is_same_v<std::string_view,
                              std::variant_alternative_t<strv_variant, value_variant_base> >);
-static_assert(std::is_same_v<array_value_base const*,
+static_assert(std::is_same_v<array_value const*,
                              std::variant_alternative_t<sequ_variant, value_variant_base> >);
 
 bool null_equivalent(value_variant val)
@@ -233,15 +236,15 @@ element_range(const std::vector<value_variant>& vec)
 }
 
 variant_span
-element_range(const array_value_base* arr)
+element_range(const array_value* arr)
 {
   return element_range(deref(arr).value());
 }
 
 variant_span
-element_range(const value_variant& val, const array_value_base*)
+element_range(const value_variant& val, const array_value*)
 {
-  return element_range(std::get<array_value_base const*>(val));
+  return element_range(std::get<array_value const*>(val));
 }
 
 template <class RangeT>
@@ -323,7 +326,7 @@ bool operator==(const value_variant& lhs, const value_variant& rhs)
       break;
 
     case sequ_variant:
-      res = stricteq_range<array_value_base const*>(lhs, rhs);
+      res = stricteq_range<array_value const*>(lhs, rhs);
       break;
 
     default:
@@ -343,7 +346,7 @@ namespace
     if (val.index() == sequ_variant)
     {
       CXX_UNLIKELY;
-      delete std::get<array_value_base const*>(val);
+      delete std::get<array_value const*>(val);
     }
   }
 
@@ -352,7 +355,7 @@ namespace
     if (val.index() == sequ_variant)
     {
       CXX_UNLIKELY;
-      val = std::get<array_value_base const*>(val)->copy();
+      val = std::get<array_value const*>(val)->copy();
     }
   }
 
@@ -429,7 +432,7 @@ array::operator=(array &&other) {
 }
 
 
-array_value_base::container_type const&
+array_value::container_type const&
 array_value::value() const
 {
   assert(vec.get());
@@ -443,11 +446,18 @@ array_value::copy() const
   return new array_value(*this);
 }
 
+value_variant
+array_value::to_variant() const
+{
+  return this;
+}
+
+
 
 #if 0
 
 
-array_value_base::container_type const&
+array_value::container_type const&
 array_view::value() const
 {
   return arr.value();
@@ -578,9 +588,7 @@ struct forwarding_visitor : visitor {
   }
   void visit(const real_value &n) override { visit(up_cast<value_base>(n)); }
   void visit(const string_value &n) override { visit(up_cast<value_base>(n)); }
-  void visit(const array_value_base &n) override { visit(up_cast<value_base>(n)); }
-  void visit(const array_value &n) override { visit(up_cast<array_value_base>(n)); }
-  //~ void visit(const array_view &n) override { visit(up_cast<array_value_base>(n)); }
+  void visit(const array_value &n) override { visit(up_cast<value_base>(n)); }
 
   void visit(const object_value &n) override { visit(up_cast<expr>(n)); }
 
@@ -1075,7 +1083,7 @@ inline bool to_concrete(std::nullptr_t, const bool &) { return false; }
 
 // \todo logical_not sure if conversions from arrays to values should be
 // supported like this
-inline bool to_concrete(array_value_base const* arr, const bool &) {
+inline bool to_concrete(array_value const* arr, const bool &) {
   return arr->value().size();
 }
 /// \}
@@ -1132,7 +1140,7 @@ to_calc_type(std::nullptr_t el)
   return el;
 }
 */
-variant_span to_calc_type(array_value_base const *n) { return element_range(n); }
+variant_span to_calc_type(array_value const *n) { return element_range(n); }
 
 /// \brief a strict equality operator operates on operands of the same
 ///        type. The operation on two different types returns false.
@@ -1303,12 +1311,12 @@ struct equality_operator : relational_operator_base, comparison_operator_base {
   // due to special conversion rules, the coercion function may just produce
   //   the result instead of just unpacking and coercing values.
 
-  std::tuple<bool, bool> coerce(const array_value_base *, const array_value_base *) const {
+  std::tuple<bool, bool> coerce(const array_value *, const array_value *) const {
     return {true, false};  // arrays are never equal
   }
 
   template <class T>
-  std::tuple<bool, bool> coerce(const T *lv, const array_value_base *rv) const {
+  std::tuple<bool, bool> coerce(const T *lv, const array_value *rv) const {
     // an array may be compared to a value_base
     //   (1) *lv == arr[0], iff the array has exactly one element
     if (rv->value().size() == 1) throw unpacked_array_req{};
@@ -1322,7 +1330,7 @@ struct equality_operator : relational_operator_base, comparison_operator_base {
   }
 
   template <class T>
-  std::tuple<bool, bool> coerce(const array_value_base *lv, const T *rv) const {
+  std::tuple<bool, bool> coerce(const array_value *lv, const T *rv) const {
     // see comments in coerce(T*,array*)
     if (lv->value().size() == 1) throw unpacked_array_req{};
 
@@ -1348,11 +1356,11 @@ struct equality_operator : relational_operator_base, comparison_operator_base {
     return {true, false};  // null pointer is only equal to itself
   }
 
-  std::tuple<bool, bool> coerce(const array_value_base *, std::nullptr_t) const {
+  std::tuple<bool, bool> coerce(const array_value *, std::nullptr_t) const {
     return {true, false};  // null pointer is only equal to itself
   }
 
-  std::tuple<bool, bool> coerce(std::nullptr_t, const array_value_base *) const {
+  std::tuple<bool, bool> coerce(std::nullptr_t, const array_value *) const {
     return {true, false};  // null pointer is only equal to itself
   }
 };
@@ -1362,12 +1370,12 @@ struct relational_operator : relational_operator_base,
   using relational_operator_base::coerce;
 
   std::tuple<variant_span, variant_span>
-  coerce(const array_value_base *lv, const array_value_base *rv) const {
+  coerce(const array_value *lv, const array_value *rv) const {
     return {element_range(lv), element_range(rv)};
   }
 
   template <class T>
-  std::tuple<bool, bool> coerce(const T *lv, array_value_base const* rv) const {
+  std::tuple<bool, bool> coerce(const T *lv, array_value const* rv) const {
     // an array may be equal to another value_base if
     //   (1) *lv == arr[0], iff the array has exactly one element
     if (rv->value().size() == 1) throw unpacked_array_req{};
@@ -1381,7 +1389,7 @@ struct relational_operator : relational_operator_base,
   }
 
   template <class T>
-  std::tuple<bool, bool> coerce(array_value_base const*lv, const T *rv) const {
+  std::tuple<bool, bool> coerce(array_value const*lv, const T *rv) const {
     // see comments in coerce(T*,array*)
     if (lv->value().size() == 1) throw unpacked_array_req{};
 
@@ -1537,10 +1545,10 @@ struct array_operator {
     defined_for_array = true
   };
 
-  using result_type = array_value_base const*;
+  using result_type = array_value const*;
 
   std::tuple<variant_span, variant_span>
-  coerce(const array_value_base *lv, const array_value_base *rv) const {
+  coerce(const array_value *lv, const array_value *rv) const {
     return {element_range(lv), element_range(rv)};
   }
 };
@@ -1608,7 +1616,7 @@ std::string_view convert(any_value val, string_table& strings, const string_oper
 }
 
   struct array_converter {
-    using result_type = array_value_base const*;
+    using result_type = array_value const*;
 
     // moves res into
     result_type to_array(any_value val) const {
@@ -1623,7 +1631,7 @@ std::string_view convert(any_value val, string_table& strings, const string_oper
     CXX_NORETURN
     result_type operator()(T&&) const                   { throw_type_error(); }
 
-    result_type operator()(array_value_base const* v) const
+    result_type operator()(array_value const* v) const
     {
       return v->copy();
     }
@@ -1665,7 +1673,7 @@ struct unpacker {
     value_t operator()(double val) const { return conv(value_t{}, val); }
     value_t operator()(std::nullptr_t) const { return conv(value_t{}, nullptr); }
 
-    value_t operator()(array_value_base const* val) const {
+    value_t operator()(array_value const* val) const {
       if constexpr (std::is_same<value_t, bool>::value) {
         CXX_LIKELY;
         return conv(value_t{}, val);
@@ -1807,7 +1815,7 @@ struct binary_operator_visitor_2 { // : forwarding_visitor {
     throw_type_error();
   }
 
-  result_type operator()(array_value_base const* n) const {
+  result_type operator()(array_value const* n) const {
     result_type res;
     if constexpr (binary_op_t::defined_for_array) {
       try {
@@ -1910,7 +1918,7 @@ struct binary_operator_visitor  {
     throw_type_error();
   }
 
-  result_type operator()(array_value_base const* n) const {
+  result_type operator()(array_value const* n) const {
     if constexpr (binary_op_t::defined_for_array) {
       try {
         return calc(n);
@@ -1972,7 +1980,7 @@ bool compare_sequence(variant_span lv, variant_span rv, binary_predicate_t pred)
 
 
 template <class binary_predicate_t>
-bool compare_sequence(array_value_base const *lv, array_value_base const *rv, binary_predicate_t pred) {
+bool compare_sequence(array_value const *lv, array_value const *rv, binary_predicate_t pred) {
   return compare_sequence(element_range(lv), element_range(rv), std::move(pred));
 }
 
@@ -2410,9 +2418,7 @@ struct evaluator : forwarding_visitor {
   void visit(const unsigned_int_value &) final;
   void visit(const real_value &) final;
   void visit(const string_value &) final;
-
   void visit(const array_value &) final;
-  void visit(const array_value_base &) final;
 
   void visit(const error &) final;
 
@@ -2762,7 +2768,7 @@ void evaluator::visit(const membership &n) {
   any_value lhs = eval(n.operand(0));
   any_value rhs = eval(n.operand(1));
 
-  auto array_op = [&lhs](array_value_base const* v) -> any_value {
+  auto array_op = [&lhs](array_value const* v) -> any_value {
     variant_span spn = element_range(v);
     auto const   lim = spn.end();
 
@@ -2778,7 +2784,7 @@ void evaluator::visit(const membership &n) {
     return to_value(false);
   };
 
-  calcres = with_type<array_value_base const*>(rhs, array_op, string_op);
+  calcres = with_type<array_value const*>(rhs, array_op, string_op);
 }
 
 void evaluator::visit(const substr &n) {
@@ -2824,7 +2830,7 @@ void evaluator::visit(const reduce &n) {
   any_value accu = eval(n.operand(2));
 
   auto op = [&expr, accu, string_store = &this->strings, calclogger = &this->logger]
-            (array_value_base const* v) -> any_value {
+            (array_value const* v) -> any_value {
     variant_span spn = element_range(v);
     return std::accumulate( spn.begin(), spn.end(),
                             std::move(accu),
@@ -2834,7 +2840,7 @@ void evaluator::visit(const reduce &n) {
 
   auto mkInvalid = []() -> any_value { return nullptr; };
 
-  calcres = with_type<array_value_base const*>(arr, op, mkInvalid);
+  calcres = with_type<array_value const*>(arr, op, mkInvalid);
 }
 
 array_value const*
@@ -2843,7 +2849,7 @@ empty_array_value() { return &mk_array_value(); }
 void evaluator::visit(const map &n) {
   any_value arr = eval(n.operand(0));
   auto mapper = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
-                 (array_value_base const* v) -> array_value const* {
+                 (array_value const* v) -> array_value const* {
     variant_span spn = element_range(v);
     expr &expr = n.operand(1);
     std::vector<any_value> mapped_elements;
@@ -2857,13 +2863,13 @@ void evaluator::visit(const map &n) {
     return &mk_array_value(std::move(mapped_elements));
   };
 
-  calcres = with_type<array_value_base const*>(arr, mapper, &empty_array_value);
+  calcres = with_type<array_value const*>(arr, mapper, &empty_array_value);
 }
 
 void evaluator::visit(const filter &n) {
   any_value arr = eval(n.operand(0));
   auto filter = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
-                (array_value_base const* v) -> array_value const* {
+                (array_value const* v) -> array_value const* {
     variant_span spn = element_range(v);
     expr &expr = n.operand(1);
     std::vector<any_value> filtered_elements;
@@ -2876,14 +2882,14 @@ void evaluator::visit(const filter &n) {
     return &mk_array_value(std::move(filtered_elements));
   };
 
-  calcres = with_type<array_value_base const*>(arr, filter, &empty_array_value);
+  calcres = with_type<array_value const*>(arr, filter, &empty_array_value);
 }
 
 void evaluator::visit(const all &n) {
   any_value arr = eval(n.operand(0));
 
   auto all_of = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
-                (array_value_base const* v) -> bool {
+                (array_value const* v) -> bool {
     variant_span spn = element_range(v);
     expr &expr = n.operand(1);
 
@@ -2894,14 +2900,14 @@ void evaluator::visit(const all &n) {
 
   auto mismatch_false = []()->bool { return false; };
 
-  calcres = with_type<array_value_base const*>(arr, all_of, mismatch_false);
+  calcres = with_type<array_value const*>(arr, all_of, mismatch_false);
 }
 
 void evaluator::visit(const none &n) {
   any_value arr = eval(n.operand(0));
 
   auto none_of = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
-                 (array_value_base const* v) -> bool {
+                 (array_value const* v) -> bool {
     variant_span spn = element_range(v);
     expr &expr = n.operand(1);
 
@@ -2912,14 +2918,14 @@ void evaluator::visit(const none &n) {
 
   auto mismatch_true = []()->bool { return true; };
 
-  calcres = with_type<array_value_base const*>(arr, none_of, mismatch_true);
+  calcres = with_type<array_value const*>(arr, none_of, mismatch_true);
 }
 
 void evaluator::visit(const some &n) {
   any_value arr = eval(n.operand(0));
 
   auto any_of = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
-                (array_value_base const* v) -> bool {
+                (array_value const* v) -> bool {
     variant_span spn = element_range(v);
     expr &expr = n.operand(1);
 
@@ -2930,7 +2936,7 @@ void evaluator::visit(const some &n) {
 
   auto mismatch_false = []()->bool { return false; };
 
-  calcres = with_type<array_value_base const*>(arr, any_of, mismatch_false);
+  calcres = with_type<array_value const*>(arr, any_of, mismatch_false);
 }
 
 void evaluator::visit(const error &) { unsupported(); }
@@ -2963,9 +2969,9 @@ evaluator::missing_aux(const oper& n, std::size_t arrpos) {
     return element_range(tmpval);
   };
 
-  auto unwrapped = [](array_value_base const* v) -> variant_span { return element_range(v); };
+  auto unwrapped = [](array_value const* v) -> variant_span { return element_range(v); };
 
-  variant_span elems = with_type<array_value_base const*>(arr, unwrapped, non_array_alt);
+  variant_span elems = with_type<array_value const*>(arr, unwrapped, non_array_alt);
 
   auto notavail = [calc = this](const any_value &val) -> bool {
     try {
@@ -3040,7 +3046,6 @@ void evaluator::visit(const log &n) {
 }
 
 void evaluator::visit(const array_value &n) { calcres = new array_value(n); }
-void evaluator::visit(const array_value_base &) { implementation_error(); }
 
 void evaluator::visit(const null_value &n) { _value(n); }
 void evaluator::visit(const bool_value &n) { _value(n); }
@@ -3171,7 +3176,7 @@ std::ostream& operator<<(std::ostream& os, const value_variant& val)
     case sequ_variant: {
       const char* sep = "";
       os << '[';
-      for (const value_variant& v : std::get<array_value_base const*>(val)->value()) {
+      for (const value_variant& v : std::get<array_value const*>(val)->value()) {
         os << sep << v;
         sep = ",";
       }

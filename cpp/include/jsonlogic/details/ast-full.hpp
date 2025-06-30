@@ -332,75 +332,32 @@ struct string_value : value_generic<std::string_view> {
   void accept(visitor &) const final;
 };
 
-// \todo most likely not needed, so this can be removed
-struct array_value_base : value_base
+struct array_value : value_base
 {
-  using container_type = std::vector<value_variant>;
+    using container_type = std::vector<value_variant>;
 
-  ~array_value_base()                                   = default;
-  array_value_base()                                    = default;
-  array_value_base(array_value_base&&)                  = default;
-  array_value_base(const array_value_base&)             = default;
-  array_value_base& operator=(array_value_base&&)       = default;
-  array_value_base& operator=(const array_value_base&)  = default;
-
-  virtual container_type const& value() const  = 0;
-  virtual const array_value_base* copy() const = 0;
-
-  value_variant to_variant() const final { return this; }
-};
-
-struct array_value : array_value_base
-{
-    using container_type = array_value_base::container_type;
-
-    ~array_value()                               = default;
+    ~array_value()                              = default;
     array_value(array_value&&)                  = default;
     array_value& operator=(array_value&&)       = default;
     array_value(const array_value&)             = default;
     array_value& operator=(const array_value&)  = default;
-
 
     explicit
     array_value(container_type elems)
     : vec(std::make_shared<container_type>(std::move(elems)))
     {}
 
-    container_type const& value() const final;
-    const array_value* copy() const final;
+    value_variant to_variant() const final;
+    container_type const& value() const;
+    const array_value* copy() const;
     void accept(visitor &) const final;
 
   private:
     const std::shared_ptr<container_type> vec;
 
-    array_value()                                = delete;
+    array_value()                               = delete;
 };
 
-#if 0
-// an internal class that
-struct array_view : array_value_base
-{
-    using container_type = array_value_base::container_type;
-
-    ~array_view()                            { std::cerr << "view" << std::endl; }
-    array_view(array_view&&)                 = default;
-    array_view(const array_view&)            = default;
-    array_view& operator=(array_view&&)      = default;
-    array_view& operator=(const array_view&) = default;
-
-    array_view(const array_value& arrval)
-    : arr(arrval)
-    {}
-
-    container_type const& value() const final;
-    const array_view* copy() const final;
-    void accept(visitor &) const final;
-
-  private:
-    const array_value& arr;
-};
-
-#endif
 
 // object types do not seem to have strong support by jsonlogic
 using object_value_data = std::map<std::string_view, any_expr>;
@@ -495,7 +452,6 @@ struct visitor {
   virtual void visit(const unsigned_int_value &) = 0;
   virtual void visit(const real_value &) = 0;
   virtual void visit(const string_value &) = 0;
-  virtual void visit(const array_value_base &) = 0;
   virtual void visit(const array_value &) = 0;
   //~ virtual void visit(const array_view &) = 0;
   virtual void visit(const object_value &) = 0;
@@ -583,7 +539,6 @@ struct generic_dispatcher : visitor {
   void visit(const string_value &n) final { res = apply(n, &n); }
   void visit(const array_value &n) final { res = apply(n, &n); }
   //~ void visit(const array_view &n) final { res = apply(n, &n); }
-  void visit(const array_value_base &n) final { res = apply(n, &n); }
   void visit(const object_value &n) final { res = apply(n, &n); }
 
   void visit(const error &n) final { res = apply(n, &n); }

@@ -26,7 +26,7 @@ struct variable_resolution_error : std::runtime_error {
 //
 // API to evaluate/apply an expression
 
-struct array_value_base;
+struct array_value;
 
 /// a type representing views on value types in jsonlogic
 /// \details
@@ -40,7 +40,7 @@ using value_variant_base = std::variant< std::monostate, // not available
                                          std::uint64_t,
                                          double,
                                          std::string_view,
-                                         array_value_base const*
+                                         array_value const*
                                        >;
 
 struct value_variant : value_variant_base {
