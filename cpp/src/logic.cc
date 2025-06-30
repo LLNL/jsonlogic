@@ -44,13 +44,6 @@ struct DebugGuard
 
 namespace jsonlogic {
 
-struct empty_string_table : string_table {
-  ~empty_string_table() {
-    // make sure that no string was allocated
-    assert(size() == 0);
-  }
-};
-
 
 namespace {
 CXX_NORETURN
@@ -172,7 +165,7 @@ static_assert(std::is_same_v<std::uint64_t,
                              std::variant_alternative_t<uint_variant, value_variant_base> >);
 static_assert(std::is_same_v<double,
                              std::variant_alternative_t<real_variant, value_variant_base> >);
-static_assert(std::is_same_v<std::string_view,
+static_assert(std::is_same_v<managed_string_view,
                              std::variant_alternative_t<strv_variant, value_variant_base> >);
 static_assert(std::is_same_v<array_value const*,
                              std::variant_alternative_t<sequ_variant, value_variant_base> >);
@@ -223,10 +216,10 @@ struct variant_span : variant_span_base
 };
 
 
-std::string_view
+managed_string_view
 element_range(const value_variant& val, const std::string_view&)
 {
-  return std::get<std::string_view>(val);
+  return std::get<managed_string_view>(val);
 }
 
 variant_span
@@ -655,9 +648,9 @@ std::vector<std::string_view> variable_map::to_vector() const {
 
 /// translates all children
 /// \{
-oper::container_type translate_children(const json::array &children, variable_map &, string_table&);
+oper::container_type translate_children(const json::array &children, variable_map &);
 
-oper::container_type translate_children(const json::value &n, variable_map &, string_table&);
+oper::container_type translate_children(const json::value &n, variable_map &);
 /// \}
 
 array& mk_array()     { return deref(new array); }
@@ -673,40 +666,40 @@ array_value& mk_array_value(std::vector<any_value> elems)
 //~ }
 
 template <class ExprT>
-ExprT &mk_operator_(const json::object &n, variable_map &m, string_table& strings) {
+ExprT &mk_operator_(const json::object &n, variable_map &m) {
   assert(n.size() == 1);
 
   ExprT &res = deref(new ExprT);
 
-  res.set_operands(translate_children(n.begin()->value(), m, strings));
+  res.set_operands(translate_children(n.begin()->value(), m));
   return res;
 }
 
 template <class ExprT>
-expr &mk_operator(const json::object &n, variable_map &m, string_table& strings) {
-  return mk_operator_<ExprT>(n, m, strings);
+expr &mk_operator(const json::object &n, variable_map &m) {
+  return mk_operator_<ExprT>(n, m);
 }
 
 template <class ExprT>
-expr &mk_missing(const json::object &n, variable_map &m, string_table& strings) {
+expr &mk_missing(const json::object &n, variable_map &m) {
   // \todo * extract variables from array and only set_computed_variables when
   // needed.
   //       * check reference implementation when missing is null
   m.set_computed_variables(true);
-  return mk_operator_<ExprT>(n, m, strings);
+  return mk_operator_<ExprT>(n, m);
 }
 
-expr &mk_variable(const json::object &n, variable_map &m, string_table& strings) {
-  var &v = mk_operator_<var>(n, m, strings);
+expr &mk_variable(const json::object &n, variable_map &m) {
+  var &v = mk_operator_<var>(n, m);
 
   m.insert(v);
   return v;
 }
 
-array &mk_array(const json::array &children, variable_map &m, string_table& strings) {
+array &mk_array(const json::array &children, variable_map &m) {
   array &res = mk_array();
 
-  res.set_operands(translate_children(children, m, strings));
+  res.set_operands(translate_children(children, m));
   return res;
 }
 
@@ -718,7 +711,7 @@ value_t &mk_value(typename value_t::value_type n) {
 null_value &mk_null_value() { return deref(new null_value); }
 
 using dispatch_table =
-    std::map<std::string_view, expr &(*)(const json::object &, variable_map &, string_table&)>;
+    std::map<std::string_view, expr &(*)(const json::object &, variable_map &)>;
 
 dispatch_table::const_iterator lookup(const dispatch_table &m,
                                       const json::object &op) {
@@ -730,7 +723,7 @@ dispatch_table::const_iterator lookup(const dispatch_table &m,
   return m.find(keyvw);
 }
 
-any_expr translate_internal(const json::value& n, variable_map &varmap, string_table &strings) {
+any_expr translate_internal(const json::value& n, variable_map &varmap) {
   static const dispatch_table dt = {
       {"==", &mk_operator<equal>},
       {"===", &mk_operator<strict_equal>},
@@ -780,7 +773,7 @@ any_expr translate_internal(const json::value& n, variable_map &varmap, string_t
 
       if (pos != dt.end()) {
         CXX_LIKELY;
-        res = &pos->second(obj, varmap, strings);
+        res = &pos->second(obj, varmap);
       } else {
         // does jsonlogic support value objects?
         unsupported();
@@ -791,13 +784,13 @@ any_expr translate_internal(const json::value& n, variable_map &varmap, string_t
 
     case json::kind::array: {
       // array is an operator that combines its subexpressions into an array
-      res = &mk_array(n.get_array(), varmap, strings);
+      res = &mk_array(n.get_array(), varmap);
       break;
     }
 
     case json::kind::string: {
       const json::string& str = n.get_string();
-      res = &mk_value<string_value>(strings.safe_string(str.begin(), str.end()));
+      res = &mk_value<string_value>(managed_string_view(str.begin(), str.size()));
       break;
     }
 
@@ -834,39 +827,37 @@ any_expr translate_internal(const json::value& n, variable_map &varmap, string_t
 }
 
 oper::container_type translate_children(const json::array &children,
-                                        variable_map &varmap,
-                                        string_table& strings) {
+                                        variable_map &varmap) {
   oper::container_type res;
 
   res.reserve(children.size());
 
   for (const json::value &elem : children)
-    res.emplace_back(translate_internal(elem, varmap, strings));
+    res.emplace_back(translate_internal(elem, varmap));
 
   return res;
 }
 
-oper::container_type translate_children(const json::value &n, variable_map &varmap, string_table& strings) {
+oper::container_type translate_children(const json::value &n, variable_map &varmap) {
   if (const json::array *arr = n.if_array()) {
     CXX_LIKELY;
-    return translate_children(*arr, varmap, strings);
+    return translate_children(*arr, varmap);
   }
 
   oper::container_type res;
 
-  res.emplace_back(translate_internal(n, varmap, strings));
+  res.emplace_back(translate_internal(n, varmap));
   return res;
 }
 }  // namespace
 
 
 logic_rule create_logic(const json::value& n) {
-  string_table strings;
   variable_map varmap;
-  any_expr node = translate_internal(n, varmap, strings);
+  any_expr node = translate_internal(n, varmap);
   bool const hasComputedVariables = varmap.hasComputedVariables();
 
-  return logic_rule(std::make_unique<logic_data>(std::move(node), varmap.to_vector(), std::move(strings), hasComputedVariables));
+  return logic_rule(std::make_unique<logic_data>(std::move(node), varmap.to_vector(), hasComputedVariables));
 }
 
 
@@ -879,7 +870,7 @@ any_value to_value(bool val) { return val; }
 any_value to_value(std::int64_t val) { return val; }
 any_value to_value(std::uint64_t val) { return val; }
 any_value to_value(double val) { return val; }
-any_value to_value(std::string_view val) { return val; }
+any_value to_value(managed_string_view val) { return val; }
 // any_value to_value(const array_value& val) { return &mk_array_view(val); }
 
 //~ no longer supported
@@ -908,7 +899,7 @@ any_value to_value(const json::value &n) {
   switch (n.kind()) {
     case json::kind::string: {
       const json::string& str = n.get_string(); // \todo this may be unsafe..
-      res = to_value(std::string_view(&*str.begin(), str.size()));
+      res = to_value(managed_string_view(&*str.begin(), str.size()));
       break;
     }
 
@@ -990,7 +981,7 @@ T from_string(std::string_view str, T el) {
 inline std::int64_t to_concrete(std::int64_t v, const std::int64_t &) {
   return v;
 }
-inline std::int64_t to_concrete(std::string_view str, const std::int64_t &el) {
+inline std::int64_t to_concrete(const managed_string_view& str, const std::int64_t &el) {
   return from_string(str, el);
 }
 inline std::int64_t to_concrete(double v, const std::int64_t &) { return v; }
@@ -1014,7 +1005,7 @@ inline std::int64_t to_concrete(std::uint64_t v, const std::int64_t &) {
 inline std::uint64_t to_concrete(std::uint64_t v, const std::uint64_t &) {
   return v;
 }
-inline std::uint64_t to_concrete(std::string_view str, const std::uint64_t &el) {
+inline std::uint64_t to_concrete(const managed_string_view& str, const std::uint64_t &el) {
   return from_string(str, el);
 }
 inline std::uint64_t to_concrete(double v, const std::uint64_t &) { return v; }
@@ -1035,7 +1026,7 @@ inline std::uint64_t to_concrete(std::int64_t v, const std::uint64_t &) {
 
 /// conversion to double
 /// \{
-inline double to_concrete(std::string_view str, const double &el) {
+inline double to_concrete(const managed_string_view& str, const double &el) {
   return from_string(str, el);
 }
 inline double to_concrete(std::int64_t v, const double &) { return v; }
@@ -1047,25 +1038,22 @@ inline double to_concrete(std::nullptr_t, const double &) { return 0; }
 
 
 
-
 /// conversion to string
 /// \{
 template <class Val>
-inline std::string_view to_concrete(Val v, const std::string_view &, string_table& strings) {
-  return strings.safe_string(std::to_string(v));
+inline managed_string_view to_concrete(Val v, const std::string_view &) {
+  return managed_string_view(std::to_string(v));
 }
-inline std::string_view to_concrete(bool v, const std::string_view &, string_table&) {
+inline managed_string_view to_concrete(bool v, const std::string_view &) {
   static constexpr const char* bool_string[] = {"false", "true"};
 
-  return bool_string[v];
+  return managed_string_view(std::string_view(bool_string[v]));
 }
-inline std::string_view to_concrete(const std::string_view &s, const std::string_view &, string_table&) {
+inline managed_string_view to_concrete(const managed_string_view &s, const std::string_view &) {
   return s;
 }
-inline std::string_view to_concrete(std::nullptr_t, const std::string_view &, string_table&) {
-  static constexpr const char* null_string = "null";
-
-  return null_string;
+inline managed_string_view to_concrete(std::nullptr_t, const std::string_view &) {
+  return managed_string_view(std::string_view("null"));
 }
 /// \}
 
@@ -1076,7 +1064,7 @@ inline bool to_concrete(bool v, const bool &) { return v; }
 inline bool to_concrete(std::int64_t v, const bool &) { return v; }
 inline bool to_concrete(std::uint64_t v, const bool &) { return v; }
 inline bool to_concrete(double v, const bool &) { return v; }
-inline bool to_concrete(const std::string_view &v, const bool &) {
+inline bool to_concrete(const managed_string_view &v, const bool &) {
   return v.size() != 0;
 }
 inline bool to_concrete(std::nullptr_t, const bool &) { return false; }
@@ -1091,6 +1079,7 @@ inline bool to_concrete(array_value const* arr, const bool &) {
 }
 
 
+/*
 template <typename T, typename U, typename = void>
 struct to_concrete_nostrings : std::false_type {};
 
@@ -1109,7 +1098,7 @@ U to_concrete_(T&& v, const U& u, string_table& strings)
   else
     return to_concrete(std::forward<T>(v), u, strings);
 }
-
+*/
 
 
 struct comparison_operator_base {
@@ -1130,7 +1119,7 @@ T to_calc_type(const T *val) {
   return *val;
 }
 
-std::string_view to_calc_type(const std::string_view *val) {
+const managed_string_view& to_calc_type(const managed_string_view *val) {
   return *val;
 }
 /*
@@ -1229,7 +1218,7 @@ struct numeric_binary_operator_base {
 struct relational_operator_base : numeric_binary_operator_base {
   using numeric_binary_operator_base::coerce;
 
-  std::tuple<double, double> coerce(const double *lv, const std::string_view* rv) const {
+  std::tuple<double, double> coerce(const double *lv, const managed_string_view* rv) const {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
@@ -1238,7 +1227,7 @@ struct relational_operator_base : numeric_binary_operator_base {
   }
 
   std::tuple<std::int64_t, std::int64_t> coerce(const std::int64_t *lv,
-                                                const std::string_view* rv) const {
+                                                const managed_string_view* rv) const {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
@@ -1248,7 +1237,7 @@ struct relational_operator_base : numeric_binary_operator_base {
   }
 
   std::tuple<std::uint64_t, std::uint64_t> coerce(const std::uint64_t *lv,
-                                                  const std::string_view* rv) const {
+                                                  const managed_string_view* rv) const {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
@@ -1257,7 +1246,7 @@ struct relational_operator_base : numeric_binary_operator_base {
     return {*lv, to_concrete(*rv, *lv)};
   }
 
-  std::tuple<double, double> coerce(const std::string_view* lv, const double *rv) const {
+  std::tuple<double, double> coerce(const managed_string_view* lv, const double *rv) const {
     return {to_concrete(*lv, *rv), *rv};
   }
 
@@ -1265,7 +1254,7 @@ struct relational_operator_base : numeric_binary_operator_base {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<std::int64_t, std::int64_t> coerce(const std::string_view* lv,
+  std::tuple<std::int64_t, std::int64_t> coerce(const managed_string_view* lv,
                                                 const std::int64_t *rv) const {
     return {to_concrete(*lv, *rv), *rv};
   }
@@ -1275,7 +1264,7 @@ struct relational_operator_base : numeric_binary_operator_base {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<std::uint64_t, std::uint64_t> coerce(const std::string_view* lv,
+  std::tuple<std::uint64_t, std::uint64_t> coerce(const managed_string_view* lv,
                                                   const std::uint64_t *rv) const {
     return {to_concrete(*lv, *rv), *rv};
   }
@@ -1285,18 +1274,18 @@ struct relational_operator_base : numeric_binary_operator_base {
     return {to_concrete(*lv, *rv), *rv};
   }
 
-  std::tuple<bool, bool> coerce(const std::string_view *, const bool *) const {
+  std::tuple<bool, bool> coerce(const managed_string_view *, const bool *) const {
     // strings and boolean are never equal
     return {true, false};
   }
 
-  std::tuple<bool, bool> coerce(const bool *, const std::string_view *) const {
+  std::tuple<bool, bool> coerce(const bool *, const managed_string_view *) const {
     // strings and boolean are never equal
     return {true, false};
   }
 
-  std::tuple<std::string_view, std::string_view> coerce(
-      const std::string_view *lv, const std::string_view *rv) const {
+  std::tuple<const managed_string_view&, const managed_string_view&> coerce(
+      const managed_string_view *lv, const managed_string_view *rv) const {
     return {*lv, *rv};
   }
 
@@ -1423,7 +1412,7 @@ struct relational_operator : relational_operator_base,
     return {*lv, 0};  // null pointer -> 0.0
   }
 
-  std::tuple<std::string_view, std::nullptr_t> coerce(const std::string_view *lv,
+  std::tuple<const managed_string_view&, std::nullptr_t> coerce(const managed_string_view *lv,
                                                       std::nullptr_t) const {
     return {to_calc_type(lv), nullptr};  // requires special handling
   }
@@ -1446,8 +1435,8 @@ struct relational_operator : relational_operator_base,
     return {0, *rv};  // null pointer -> 0
   }
 
-  std::tuple<std::nullptr_t, std::string_view> coerce(std::nullptr_t,
-                                                      const std::string_view *rv) const {
+  std::tuple<std::nullptr_t, const managed_string_view&> coerce(std::nullptr_t,
+                                                      const managed_string_view *rv) const {
     return {nullptr, to_calc_type(rv)};  // requires special handling
   }
 };
@@ -1529,8 +1518,8 @@ struct string_operator_non_destructive {
 
   using result_type = any_value;
 
-  std::tuple<std::string_view, std::string_view> coerce(
-      const std::string_view *lv, const std::string_view *rv) const {
+  std::tuple<const managed_string_view&, const managed_string_view&> coerce(
+      const managed_string_view *lv, const managed_string_view *rv) const {
     return {*lv, *rv};
   }
 };
@@ -1569,7 +1558,7 @@ struct arithmetic_converter {
   any_value operator()(bool)            const { return nullptr; /* correct? */ }
 
   // need to convert values
-  any_value operator()(std::string_view v) const {
+  any_value operator()(const managed_string_view& v) const {
     const double        dblval = to_concrete(v, double{});
     const std::int64_t  intval = dblval;
     const bool          intval_is_precise = dblval == intval;
@@ -1588,7 +1577,7 @@ struct arithmetic_converter {
 };
 
 
-any_value convert(any_value val, string_table&, const arithmetic_operator &) {
+any_value convert(any_value val, const arithmetic_operator &) {
   return std::visit(arithmetic_converter{}, val);
 }
 
@@ -1596,23 +1585,21 @@ any_value convert(any_value val, string_table&, const arithmetic_operator &) {
 struct string_converter {
     template <class T>
     CXX_NORETURN
-    std::string_view operator()(T) const { throw_type_error(); }
+    managed_string_view operator()(T) const { throw_type_error(); }
 
     // defined for the following types
-    std::string_view operator()(std::string_view val) const { return val; }
+    managed_string_view operator()(managed_string_view val) const { return val; }
     // need to convert values
-    std::string_view operator()(bool val) const { return to_concrete(val, std::string_view{}, strings); }
-    std::string_view operator()(std::int64_t val) const { return to_concrete(val, std::string_view{}, strings); }
-    std::string_view operator()(std::uint64_t val) const { return to_concrete(val, std::string_view{}, strings); }
-    std::string_view operator()(double val) const { return to_concrete(val, std::string_view{}, strings); }
-    std::string_view operator()(std::nullptr_t) const { return to_concrete(nullptr, std::string_view{}, strings); }
-  // private
-    string_table& strings;
+    managed_string_view operator()(bool val) const { return to_concrete(val, std::string_view{}); }
+    managed_string_view operator()(std::int64_t val) const { return to_concrete(val, std::string_view{}); }
+    managed_string_view operator()(std::uint64_t val) const { return to_concrete(val, std::string_view{}); }
+    managed_string_view operator()(double val) const { return to_concrete(val, std::string_view{}); }
+    managed_string_view operator()(std::nullptr_t) const { return to_concrete(nullptr, std::string_view{}); }
 };
 
 
-std::string_view convert(any_value val, string_table& strings, const string_operator_non_destructive &) {
-  return std::visit(string_converter{strings}, val);
+managed_string_view convert(any_value val, const string_operator_non_destructive &) {
+  return std::visit(string_converter{}, val);
 }
 
   struct array_converter {
@@ -1637,26 +1624,40 @@ std::string_view convert(any_value val, string_table& strings, const string_oper
     }
 
     // need to move value_base to new array
-    result_type operator()(std::string_view v) const    { return to_array(to_value(v)); }
-    result_type operator()(bool v) const                { return to_array(to_value(v)); }
-    result_type operator()(std::int64_t v) const        { return to_array(to_value(v)); }
-    result_type operator()(std::uint64_t v) const       { return to_array(to_value(v)); }
-    result_type operator()(double v) const              { return to_array(to_value(v)); }
-    result_type operator()(std::nullptr_t) const        { return to_array(to_value(nullptr)); }
+    result_type operator()(const managed_string_view& v) const { return to_array(to_value(v)); }
+    result_type operator()(bool v) const                       { return to_array(to_value(v)); }
+    result_type operator()(std::int64_t v) const               { return to_array(to_value(v)); }
+    result_type operator()(std::uint64_t v) const              { return to_array(to_value(v)); }
+    result_type operator()(double v) const                     { return to_array(to_value(v)); }
+    result_type operator()(std::nullptr_t) const               { return to_array(to_value(nullptr)); }
   };
 
 
-any_value convert(any_value val, string_table&, const array_operator &) {
+any_value convert(any_value val, const array_operator &) {
   return std::visit(array_converter{}, val);
 }
 
 template <class value_t>
+struct tag_type_traits
+{
+  using type = value_t;
+};
+
+template <>
+struct tag_type_traits<managed_string_view>
+{
+  using type = std::string_view;
+};
+
+template <class value_t>
 struct unpacker {
-    value_t conv(const value_t&, const value_t& val) { return val; }
+    using tag_type = tag_type_traits<value_t>::type;
+
+    value_t conv(const value_t& val, const tag_type&) { return val; }
 
     template <class U>
-    value_t conv(const value_t &lhs, const U &val) const {
-      return to_concrete_(val, lhs, strings);
+    value_t conv(const U &val, const tag_type &tag) const {
+      return to_concrete(val, tag);
     }
 
     template <class T>
@@ -1664,26 +1665,23 @@ struct unpacker {
     value_t operator()(T) const { throw_type_error(); }
 
     // defined for the following types
-    value_t operator()(std::string_view val) const { return conv(value_t{}, val); }
+    value_t operator()(const managed_string_view& val) const { return conv(val, tag_type{}); }
 
     // need to convert values
-    value_t operator()(bool val) const { return conv(value_t{}, val); }
-    value_t operator()(std::int64_t val) const { return conv(value_t{}, val); }
-    value_t operator()(std::uint64_t val) const { return conv(value_t{}, val); }
-    value_t operator()(double val) const { return conv(value_t{}, val); }
-    value_t operator()(std::nullptr_t) const { return conv(value_t{}, nullptr); }
+    value_t operator()(bool val) const { return conv(val, tag_type{}); }
+    value_t operator()(std::int64_t val) const { return conv(val, tag_type{}); }
+    value_t operator()(std::uint64_t val) const { return conv(val, tag_type{}); }
+    value_t operator()(double val) const { return conv(val, tag_type{}); }
+    value_t operator()(std::nullptr_t) const { return conv(nullptr, tag_type{}); }
 
     value_t operator()(array_value const* val) const {
       if constexpr (std::is_same<value_t, bool>::value) {
         CXX_LIKELY;
-        return conv(value_t{}, val);
+        return conv(val, tag_type{});
       }
 
       throw_type_error();
     }
-
- // private:
-    string_table& strings;
 };
 
 /*
@@ -1697,8 +1695,8 @@ T unpack_value(const expr &expr, string_table& strings) {
 */
 
 template <class T>
-T unpack_value(any_value el, string_table& strings) {
-  return std::visit(unpacker<T>{strings}, el);
+T unpack_value(any_value el) {
+  return std::visit(unpacker<T>{}, el);
 }
 
 
@@ -1708,9 +1706,7 @@ T unpack_value(any_value el, string_table& strings) {
 
 bool truthy(const any_value &el)
 {
-  empty_string_table tmp; // will not be used
-
-  return unpack_value<bool>(el, tmp);
+  return unpack_value<bool>(el);
 }
 
 bool falsy(const any_value &el) { return !truthy(el); }
@@ -1753,7 +1749,7 @@ struct binary_operator_visitor_2 { // : forwarding_visitor {
   CXX_NORETURN
   result_type operator()(T) const { throw_type_error(); }
 
-  result_type operator()(std::string_view n) const {
+  result_type operator()(const managed_string_view& n) const {
     if constexpr (binary_op_t::defined_for_string) return calc(&n);
 
     throw_type_error();
@@ -1855,7 +1851,7 @@ struct binary_operator_visitor  {
   CXX_NORETURN
   result_type operator()(T) const { throw_type_error(); }
 
-  result_type operator()(std::string_view n) const {
+  result_type operator()(const managed_string_view& n) const {
     if constexpr (binary_op_t::defined_for_string) return calc(&n);
 
     throw_type_error();
@@ -2086,11 +2082,11 @@ struct operator_impl<less> : relational_operator {
     return compare_sequence(lv, rv, *this);
   }
 
-  result_type operator()(std::string_view, std::nullptr_t) const {
+  result_type operator()(const managed_string_view&, std::nullptr_t) const {
     return false;
   }
 
-  result_type operator()(std::nullptr_t, std::string_view) const {
+  result_type operator()(std::nullptr_t, const managed_string_view&) const {
     return false;
   }
 
@@ -2112,11 +2108,11 @@ struct operator_impl<greater> : relational_operator {
     return compare_sequence(lv, rv, *this);
   }
 
-  result_type operator()(std::string_view, std::nullptr_t) const {
+  result_type operator()(const managed_string_view&, std::nullptr_t) const {
     return false;
   }
 
-  result_type operator()(std::nullptr_t, std::string_view) const {
+  result_type operator()(std::nullptr_t, const managed_string_view&) const {
     return false;
   }
 
@@ -2138,11 +2134,11 @@ struct operator_impl<less_or_equal> : relational_operator {
     return compare_sequence(lv, rv, *this);
   }
 
-  result_type operator()(std::string_view lhs, std::nullptr_t) const {
+  result_type operator()(const managed_string_view& lhs, std::nullptr_t) const {
     return lhs.empty();
   }
 
-  result_type operator()(std::nullptr_t, std::string_view rhs) const {
+  result_type operator()(std::nullptr_t, const managed_string_view& rhs) const {
     return rhs.empty();
   }
 
@@ -2164,11 +2160,11 @@ struct operator_impl<greater_or_equal> : relational_operator {
     return compare_sequence(lv, rv, *this);
   }
 
-  result_type operator()(std::string_view lhs, std::nullptr_t) const {
+  result_type operator()(const managed_string_view& lhs, std::nullptr_t) const {
     return lhs.empty();
   }
 
-  result_type operator()(std::nullptr_t, std::string_view rhs) const {
+  result_type operator()(std::nullptr_t, const managed_string_view& rhs) const {
     return rhs.empty();
   }
 
@@ -2305,12 +2301,7 @@ template <>
 struct operator_impl<cat> : string_operator_non_destructive {
   using string_operator_non_destructive::result_type;
 
-  explicit
-  operator_impl(string_table& strtab)
-  : string_operator_non_destructive(), strings(strtab)
-  {}
-
-  result_type operator()(std::string_view lhs, std::string_view rhs) const {
+  result_type operator()(const managed_string_view& lhs, const managed_string_view& rhs) const {
     std::string tmp;
 
     tmp.reserve(lhs.size() + rhs.size());
@@ -2318,10 +2309,8 @@ struct operator_impl<cat> : string_operator_non_destructive {
     tmp.append(lhs.begin(), lhs.end());
     tmp.append(rhs.begin(), rhs.end());
 
-    return to_value(strings.safe_string(std::move(tmp)));
+    return to_value(managed_string_view(std::move(tmp)));
   }
-
-  string_table& strings;
 };
 
 /// implements the string mode of the membership operator
@@ -2331,7 +2320,7 @@ template <>
 struct operator_impl<membership> : string_operator_non_destructive {
   using string_operator_non_destructive::result_type;
 
-  result_type operator()(std::string_view lhs, std::string_view rhs) const {
+  result_type operator()(const managed_string_view& lhs, const managed_string_view& rhs) const {
     const bool res = (rhs.find(lhs) != json::string::npos);
 
     return to_value(res);
@@ -2345,7 +2334,7 @@ struct operator_impl<regex_match>
 {
   using string_operator_non_destructive::result_type;
 
-  result_type operator()(std::string_view lhs, std::string_view rhs) const {
+  result_type operator()(const managed_string_view& lhs, const managed_string_view& rhs) const {
     std::regex rgx(lhs.c_str(), lhs.size());
 
     return to_value(std::regex_search(rhs.begin(), rhs.end(), rgx));
@@ -2372,8 +2361,8 @@ struct operator_impl<merge> : array_operator {
 using variant_logger = std::function<void(const value_variant&)>;
 
 struct evaluator : forwarding_visitor {
-  evaluator(variable_accessor varAccess, string_table& string_store, variant_logger& out)
-      : vars(std::move(varAccess)), logger(out), strings(string_store), calcres(nullptr) {}
+  evaluator(variable_accessor varAccess, variant_logger& out)
+      : vars(std::move(varAccess)), logger(out), calcres(nullptr) {}
 
   void visit(const equal &) final;
   void visit(const strict_equal &) final;
@@ -2431,7 +2420,6 @@ struct evaluator : forwarding_visitor {
  private:
   variable_accessor vars;
   variant_logger& logger;
-  string_table& strings;
   any_value calcres;
 
   evaluator(const evaluator &) = delete;
@@ -2478,12 +2466,12 @@ struct evaluator : forwarding_visitor {
 };
 
 struct sequence_function {
-  sequence_function(const expr &e, string_table& string_store, variant_logger &logstream)
-      : exp(e), strings(string_store), logger(logstream) {}
+  sequence_function(const expr &e, variant_logger &logstream)
+      : exp(e), logger(logstream) {}
 
   any_value operator()(const any_value &elem) const {
     evaluator sub{[&elem](value_variant keyval, int) -> any_value {
-                    if (std::string_view* pkey = std::get_if<std::string_view>(&keyval)) {
+                    if (managed_string_view* pkey = std::get_if<managed_string_view>(&keyval)) {
                       if (pkey->size() == 0)
                         return elem;
 #if OBSOLETE
@@ -2499,7 +2487,6 @@ struct sequence_function {
 
                     return nullptr;
                   },
-                  strings,
                   logger};
 
     return sub.eval(exp);
@@ -2507,7 +2494,6 @@ struct sequence_function {
 
  private:
   const expr &exp;
-  string_table& strings;
   variant_logger& logger;
 };
 
@@ -2542,19 +2528,18 @@ struct sequence_predicate_nondestructive : sequence_function {
 */
 
 struct sequence_reduction {
-  sequence_reduction(expr &e, string_table& string_store, variant_logger& logstream)
-      : exp(e), strings(string_store), logger(logstream) {}
+  sequence_reduction(expr &e, variant_logger& logstream)
+      : exp(e), logger(logstream) {}
 
   any_value operator()(any_value accu, any_value elem) const {
     evaluator sub{[&accu, &elem](value_variant keyval, int) -> any_value {
-                    if (const std::string_view *pkey = std::get_if<std::string_view>(&keyval)) {
+                    if (const managed_string_view *pkey = std::get_if<managed_string_view>(&keyval)) {
                       CXX_LIKELY;
                       if (*pkey == "current") return elem;
                       if (*pkey == "accumulator") return accu;
                     }
                     return to_value(nullptr);
                   },
-                  strings,
                   logger};
 
     return sub.eval(exp);
@@ -2562,7 +2547,6 @@ struct sequence_reduction {
 
  private:
   expr &exp;
-  string_table& strings;
   variant_logger& logger;
 };
 
@@ -2573,9 +2557,7 @@ std::int64_t evaluator::unpack_optional_int_arg(const oper &n, int argpos,
     return defaultVal;
   }
 
-  empty_string_table tmp; // will not be used
-
-  return unpack_value<std::int64_t>(eval(n.operand(argpos)), tmp);
+  return unpack_value<std::int64_t>(eval(n.operand(argpos)));
 }
 
 template <class unary_predicate_t>
@@ -2617,11 +2599,11 @@ void evaluator::reduce_sequence(const oper &n, binary_op_t op) {
   int idx = -1;
 
   any_value tmp0 = eval(n.operand(++idx));
-  any_value res  = convert(std::move(tmp0), strings, op);
+  any_value res  = convert(std::move(tmp0), op);
 
   while (idx != (num - 1)) {
     any_value tmp1 = eval(n.operand(++idx));
-    any_value rhs  = convert(std::move(tmp1), strings, op);
+    any_value rhs  = convert(std::move(tmp1), op);
     any_value tmp2 = compute(res, rhs, op);
 
     res = std::move(tmp2);
@@ -2752,7 +2734,7 @@ void evaluator::visit(const max &n) {
 }
 
 void evaluator::visit(const cat &n) {
-  reduce_sequence(n, operator_impl<cat>{strings});
+  reduce_sequence(n, operator_impl<cat>{});
 }
 
 #if WITH_JSON_LOGIC_CPP_EXTENSIONS
@@ -2790,7 +2772,7 @@ void evaluator::visit(const membership &n) {
 void evaluator::visit(const substr &n) {
   assert(n.num_evaluated_operands() >= 1);
 
-  std::string_view str = unpack_value<std::string_view>(eval(n.operand(0)), strings);
+  managed_string_view str = unpack_value<managed_string_view>(eval(n.operand(0)));
   std::int64_t ofs = unpack_optional_int_arg(n, 1, 0);
   std::int64_t cnt = unpack_optional_int_arg(n, 2, 0);
 
@@ -2829,12 +2811,12 @@ void evaluator::visit(const reduce &n) {
   expr &expr = n.operand(1);
   any_value accu = eval(n.operand(2));
 
-  auto op = [&expr, accu, string_store = &this->strings, calclogger = &this->logger]
+  auto op = [&expr, accu, calclogger = &this->logger]
             (array_value const* v) -> any_value {
     variant_span spn = element_range(v);
     return std::accumulate( spn.begin(), spn.end(),
                             std::move(accu),
-                            sequence_reduction{expr, *string_store, *calclogger}
+                            sequence_reduction{expr, *calclogger}
                           );
   };
 
@@ -2848,7 +2830,7 @@ empty_array_value() { return &mk_array_value(); }
 
 void evaluator::visit(const map &n) {
   any_value arr = eval(n.operand(0));
-  auto mapper = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
+  auto mapper = [&n, &arr, calclogger = &this->logger]
                  (array_value const* v) -> array_value const* {
     variant_span spn = element_range(v);
     expr &expr = n.operand(1);
@@ -2858,7 +2840,7 @@ void evaluator::visit(const map &n) {
 
     std::transform(spn.begin(), spn.end(),
                    std::back_inserter(mapped_elements),
-                   sequence_function{expr, *string_store, *calclogger});
+                   sequence_function{expr, *calclogger});
 
     return &mk_array_value(std::move(mapped_elements));
   };
@@ -2868,7 +2850,7 @@ void evaluator::visit(const map &n) {
 
 void evaluator::visit(const filter &n) {
   any_value arr = eval(n.operand(0));
-  auto filter = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
+  auto filter = [&n, &arr, calclogger = &this->logger]
                 (array_value const* v) -> array_value const* {
     variant_span spn = element_range(v);
     expr &expr = n.operand(1);
@@ -2877,7 +2859,7 @@ void evaluator::visit(const filter &n) {
     // non destructive predicate is required for evaluating and copying
     std::copy_if(spn.begin(), spn.end(),
                  std::back_inserter(filtered_elements),
-                 sequence_predicate_nondestructive{expr, *string_store, *calclogger});
+                 sequence_predicate_nondestructive{expr, *calclogger});
 
     return &mk_array_value(std::move(filtered_elements));
   };
@@ -2888,13 +2870,13 @@ void evaluator::visit(const filter &n) {
 void evaluator::visit(const all &n) {
   any_value arr = eval(n.operand(0));
 
-  auto all_of = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
+  auto all_of = [&n, &arr, calclogger = &this->logger]
                 (array_value const* v) -> bool {
     variant_span spn = element_range(v);
     expr &expr = n.operand(1);
 
     return std::all_of( spn.begin(), spn.end(),
-                        sequence_predicate{expr, *string_store, *calclogger}
+                        sequence_predicate{expr, *calclogger}
                       );
   };
 
@@ -2906,13 +2888,13 @@ void evaluator::visit(const all &n) {
 void evaluator::visit(const none &n) {
   any_value arr = eval(n.operand(0));
 
-  auto none_of = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
+  auto none_of = [&n, &arr, calclogger = &this->logger]
                  (array_value const* v) -> bool {
     variant_span spn = element_range(v);
     expr &expr = n.operand(1);
 
     return std::none_of( spn.begin(), spn.end(),
-                         sequence_predicate{expr, *string_store, *calclogger}
+                         sequence_predicate{expr, *calclogger}
                        );
   };
 
@@ -2924,13 +2906,13 @@ void evaluator::visit(const none &n) {
 void evaluator::visit(const some &n) {
   any_value arr = eval(n.operand(0));
 
-  auto any_of = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
+  auto any_of = [&n, &arr, calclogger = &this->logger]
                 (array_value const* v) -> bool {
     variant_span spn = element_range(v);
     expr &expr = n.operand(1);
 
     return std::any_of( spn.begin(), spn.end(),
-                        sequence_predicate{expr, *string_store, *calclogger}
+                        sequence_predicate{expr, *calclogger}
                       );
   };
 
@@ -3004,7 +2986,7 @@ void evaluator::visit(const missing &n) {
 }
 
 void evaluator::visit(const missing_some &n) {
-  const std::uint64_t minreq = unpack_value<std::uint64_t>(eval(n.operand(0)), strings);
+  const std::uint64_t minreq = unpack_value<std::uint64_t>(eval(n.operand(0)));
 
   auto [res, avail] = missing_aux(n, 1);
 
@@ -3054,14 +3036,14 @@ void evaluator::visit(const unsigned_int_value &n) { _value(n); }
 void evaluator::visit(const real_value &n) { _value(n); }
 void evaluator::visit(const string_value &n) { _value(n); }
 
-any_value eval_path(std::string_view path, const json::object *obj) {
+any_value eval_path(const managed_string_view& path, const json::object *obj) {
   if (obj) {
     if (auto pos = obj->find(path); pos != obj->end())
       return jsonlogic::to_value(pos->value());
 
     if (std::size_t pos = path.find('.'); pos != json::string::npos) {
-      std::string_view selector = path.substr(0, pos);
-      std::string_view suffix   = path.substr(pos + 1);
+      managed_string_view selector = path.substr(0, pos);
+      managed_string_view suffix   = path.substr(pos + 1);
 
       return eval_path(suffix, obj->at(selector).if_object());
     }
@@ -3076,16 +3058,16 @@ any_value eval_index(IntT idx, const json::array &arr) {
 }
 
 
-any_value apply(const expr &exp, string_table& strings, const variable_accessor &vars) {
+any_value apply(const expr &exp, const variable_accessor &vars) {
   variant_logger logger = [](const value_variant& val) -> void { std::cerr << val << std::endl; };
-  evaluator ev{vars, strings, logger};
+  evaluator ev{vars, logger};
 
   return ev.eval(exp);
 }
 
 any_value apply(logic_data& rule, const variable_accessor &vars) {
   assert(rule.syntax_tree().get());
-  return apply(*rule.syntax_tree(), rule.strings(), vars);
+  return jsonlogic::apply(*rule.syntax_tree(), vars);
 }
 
 any_value apply(logic_data& rule) {
@@ -3104,7 +3086,7 @@ any_value apply(logic_data& rule, std::vector<value_variant> vars) {
 
 variable_accessor json_accessor(json::value data) {
   return [data = std::move(data)](value_variant keyval, int) -> any_value {
-    if (const std::string_view *ppath = std::get_if<std::string_view>(&keyval)) {
+    if (const managed_string_view *ppath = std::get_if<managed_string_view>(&keyval)) {
       //~ std::cerr << *ppath << std::endl;
       return ppath->size() ? eval_path(*ppath, data.if_object())
                            : to_value(data);
@@ -3169,7 +3151,7 @@ std::ostream& operator<<(std::ostream& os, const value_variant& val)
     }
 
     case strv_variant: {
-      os << '"' << std::get<std::string_view>(val) << '"';
+      os << '"' << std::string_view(std::get<managed_string_view>(val)) << '"';
       break;
     }
 
