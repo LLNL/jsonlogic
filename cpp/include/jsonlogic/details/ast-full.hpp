@@ -171,24 +171,22 @@ struct modulo : oper_n<2> {
 //   they can be considered collections, but also an aggregate value.
 // The class is final and it supports move ctor/assignment, so the data
 //   can move efficiently.
+
 struct array final : oper  // array is modeled as operator
 {
   void accept(visitor &) const final;
 
   array() = default;
 
-  array(array &&);
-  array &operator=(array &&);
+  array(array &&other) : oper() {
+    set_operands(std::move(other).move_operands());
+  }
+
+  array &operator=(array &&other) {
+    set_operands(std::move(other).move_operands());
+    return *this;
+  }
 };
-
-array::array(array &&other) : oper() {
-  set_operands(std::move(other).move_operands());
-}
-
-array &array::operator=(array &&other) {
-  set_operands(std::move(other).move_operands());
-  return *this;
-}
 
 struct map : oper_n<2> {
   void accept(visitor &) const final;
