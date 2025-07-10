@@ -1,6 +1,6 @@
 /// implements jsonlogic functions
 
-#include "jsonlogic/logic.hpp"
+#include <jsonlogic/logic.hpp>
 
 // standard headers
 #include <algorithm>
