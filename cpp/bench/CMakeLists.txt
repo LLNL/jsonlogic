@@ -69,10 +69,6 @@ target_include_directories(jl-bench-membership SYSTEM PRIVATE
 
 target_link_libraries(jl-bench-membership PRIVATE jsonlogic faker-cxx)
 
-# target_include_directories(jl-bench-membership SYSTEM PRIVATE
-#     ${CMAKE_BINARY_DIR}/_deps/faker-src/include
-# )
-
 
 add_executable(jl-bench-generic src/benchmark-generic.cpp)
 target_include_directories(jl-bench-generic SYSTEM PRIVATE
