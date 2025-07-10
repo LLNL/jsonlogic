@@ -22,7 +22,7 @@
 #include "jsonlogic/details/cxx-compat.hpp"
 
 namespace {
-constexpr bool DEBUG_OUTPUT = false;
+[[maybe_unused]] constexpr bool DEBUG_OUTPUT = false;
 constexpr int COMPUTED_VARIABLE_NAME = -1;
 } // namespace
 
@@ -626,7 +626,8 @@ struct unpacked_array_req : internal_coercion_error {};
 
 /// conversion to int64
 /// \{
-inline std::int64_t to_concrete(std::int64_t v, const std::int64_t &) {
+[[maybe_unused]] inline std::int64_t to_concrete(std::int64_t v,
+                                                 const std::int64_t &) {
   return v;
 }
 inline std::int64_t to_concrete(const json::string &str, const std::int64_t &) {
@@ -654,7 +655,8 @@ inline std::int64_t to_concrete(std::uint64_t v, const std::int64_t &) {
 
 /// conversion to uint64
 /// \{
-inline std::uint64_t to_concrete(std::uint64_t v, const std::uint64_t &) {
+[[maybe_unused]] inline std::uint64_t to_concrete(std::uint64_t v,
+                                                  const std::uint64_t &) {
   return v;
 }
 inline std::uint64_t to_concrete(const json::string &str,
@@ -692,11 +694,16 @@ inline double to_concrete(std::int64_t v, const double &) {
 inline double to_concrete(std::uint64_t v, const double &) {
   return static_cast<double>(v);
 }
-inline double to_concrete(double v, const double &) { return v; }
+[[maybe_unused]] inline double to_concrete(double v, const double &) {
+  return v;
+}
+
 inline double to_concrete(bool v, const double &) {
   return static_cast<double>(v);
 }
-inline double to_concrete(std::nullptr_t, const double &) { return 0; }
+[[maybe_unused]] inline double to_concrete(std::nullptr_t, const double &) {
+  return 0;
+}
 /// \}
 
 /// conversion to string
@@ -709,7 +716,8 @@ inline json::string to_concrete(Val v, const json::string &) {
 inline json::string to_concrete(bool v, const json::string &) {
   return json::string{v ? "true" : "false"};
 }
-inline json::string to_concrete(const json::string &s, const json::string &) {
+[[maybe_unused]] inline json::string to_concrete(const json::string &s,
+                                                 const json::string &) {
   return s;
 }
 inline json::string to_concrete(std::nullptr_t, const json::string &) {
