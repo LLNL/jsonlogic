@@ -43,7 +43,7 @@ option(JSONLOGIC_ENABLE_TESTS "Build the test code" ON)
 
 add_library(jsonlogic SHARED ${CMAKE_CURRENT_SOURCE_DIR}/src/logic.cc)
 target_include_directories(jsonlogic PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_compile_options(jsonlogic PUBLIC -Wall -Wextra -pedantic)
+
 
 target_link_libraries(jsonlogic LINK_PUBLIC Boost::json)
 
