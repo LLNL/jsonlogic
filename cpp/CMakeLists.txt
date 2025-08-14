@@ -37,8 +37,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(Boost)
 
 
-option(JSONLOGIC_ENABLE_BENCH "Build the benchmark code" ON)
-option(JSONLOGIC_ENABLE_TESTS "Build the test code" ON)
+option(JSONLOGIC_ENABLE_BENCH "Build the benchmark code" OFF)
+option(JSONLOGIC_ENABLE_TESTS "Build the test code" OFF)
 
 
 add_library(jsonlogic SHARED ${CMAKE_CURRENT_SOURCE_DIR}/src/logic.cc)
