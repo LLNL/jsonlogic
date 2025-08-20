@@ -8,6 +8,9 @@
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_STANDARD": "20",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+        "CMAKE_CXX_EXTENSIONS": "OFF",
         "JSONLOGIC_ENABLE_BENCH": "ON",
         "JSONLOGIC_ENABLE_TESTS": "ON"
       },
@@ -21,13 +24,15 @@
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_STANDARD": "20",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+        "CMAKE_CXX_EXTENSIONS": "OFF",
         "JSONLOGIC_ENABLE_BENCH": "ON",
         "JSONLOGIC_ENABLE_TESTS": "ON"
       },
       "generator": "Unix Makefiles",
       "binaryDir": "${sourceDir}/build/debug"
     },
-
     {
       "name": "relwithdebinfo",
       "displayName": "Release with Debug Info",
@@ -35,6 +40,9 @@
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_CXX_STANDARD": "20",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+        "CMAKE_CXX_EXTENSIONS": "OFF",
         "JSONLOGIC_ENABLE_BENCH": "ON",
         "JSONLOGIC_ENABLE_TESTS": "ON"
       },
@@ -53,7 +61,6 @@
       "displayName": "Build Debug",
       "configurePreset": "debug"
     },
-
     {
       "name": "relwithdebinfo",
       "displayName": "Build Release with Debug Info",

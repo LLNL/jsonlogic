@@ -6,10 +6,12 @@
 #include <faker-cxx/number.h>
 #include <faker-cxx/person.h>
 #include <faker-cxx/string.h>
+#include <format>
 #include <fstream>
 #include <iostream>
 #include <jsonlogic/logic.hpp>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>
@@ -20,7 +22,7 @@ namespace bjsn = boost::json;
 std::string read_file(const std::string &filename) {
   std::ifstream file(filename);
   if (!file)
-    throw std::runtime_error("Failed to open file: " + filename);
+    throw std::runtime_error(std::format("Failed to open file: {}", filename));
   return {std::istreambuf_iterator<char>(file),
           std::istreambuf_iterator<char>()};
 }
