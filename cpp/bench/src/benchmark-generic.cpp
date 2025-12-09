@@ -144,7 +144,7 @@ int main(int argc, const char **argv) try {
         else if (std::holds_alternative<double>(val))
           args.push_back(std::get<double>(val));
         else if (std::holds_alternative<std::string>(val))
-          args.push_back(std::get<std::string>(val));
+          args.push_back(jsonlogic::managed_string_view(std::get<std::string>(val)));
         else if (std::holds_alternative<bool>(val))
           args.push_back(std::get<bool>(val));
       }

@@ -141,7 +141,7 @@ jsonlogic::value_variant to_value_variant(const bjsn::value &n) {
   switch (n.kind()) {
   case bjsn::kind::string: {
     const bjsn::string &str = n.get_string();
-    res = std::string_view(str.data(), str.size());
+    res = jsonlogic::managed_string_view(std::string_view(str.data(), str.size()));
     break;
   }
 

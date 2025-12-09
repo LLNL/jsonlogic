@@ -3,7 +3,7 @@
 #include <memory>
 #include <boost/json.hpp>
 
-//~ #include "details/ast-core.hpp"
+#include "managed_string_view.hpp"
 
 namespace jsonlogic {
 
@@ -39,7 +39,7 @@ using value_variant_base = std::variant< std::monostate, // not available
                                          std::int64_t,
                                          std::uint64_t,
                                          double,
-                                         std::string_view,
+                                         managed_string_view,
                                          array_value const*
                                        >;
 

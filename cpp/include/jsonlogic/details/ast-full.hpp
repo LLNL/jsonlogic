@@ -325,8 +325,8 @@ struct real_value : value_generic<double> {
   void accept(visitor &) const final;
 };
 
-struct string_value : value_generic<std::string_view> {
-  using base = value_generic<std::string_view>;
+struct string_value : value_generic<managed_string_view> {
+  using base = value_generic<managed_string_view>;
   using base::base;
 
   void accept(visitor &) const final;
@@ -579,6 +579,8 @@ auto generic_visit(ast_functor fn, ast_node *n, arguments... args)
 }
 
 
+#if 0
+
 //
 // logic internal data
 
@@ -618,8 +620,10 @@ struct string_table : private string_table_base
     string_table& operator=(const string_table&) = delete;
 };
 
+#endif
 
-using logic_data_base = std::tuple<any_expr, std::vector<std::string_view>, string_table, bool>;
+
+using logic_data_base = std::tuple<any_expr, std::vector<std::string_view>, bool>;
 struct logic_data : logic_data_base
 {
   using base = logic_data_base;
@@ -631,12 +635,8 @@ struct logic_data : logic_data_base
   /// returns static variable names (i.e., variable names that are not computed)
   std::vector<std::string_view> const &variable_names() const { return std::get<1>(*this); }
 
-  /// returns the string table
-  string_table&       strings()       { return std::get<2>(*this); }
-  string_table const& strings() const { return std::get<2>(*this); }
-
   /// returns if the expression contains computed names.
-  bool has_computed_variable_names() const { return std::get<3>(*this); }
+  bool has_computed_variable_names() const { return std::get<2>(*this); }
 };
 
 
