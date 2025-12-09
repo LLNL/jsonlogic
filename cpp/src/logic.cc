@@ -1,9 +1,10 @@
 /// implements jsonlogic functions
 
-#include "jsonlogic/logic.hpp"
+#include <jsonlogic/logic.hpp>
 
 // standard headers
 #include <algorithm>
+#include <cstdint>
 #include <exception>
 #include <iostream>
 #include <limits>
@@ -26,9 +27,8 @@
 #include "jsonlogic/details/cxx-compat.hpp"
 
 namespace {
-constexpr bool DEBUG_OUTPUT = false;
+[[maybe_unused]] constexpr bool DEBUG_OUTPUT = false;
 constexpr int COMPUTED_VARIABLE_NAME = -1;
-
 #if DEBUGGING_SUPPORT
 struct DebugGuard
 {
@@ -41,7 +41,6 @@ struct DebugGuard
 
 }  // namespace
 
-
 namespace jsonlogic {
 
 struct empty_string_table : string_table {
@@ -50,7 +49,6 @@ struct empty_string_table : string_table {
     assert(size() == 0);
   }
 };
-
 
 namespace {
 CXX_NORETURN
@@ -62,7 +60,6 @@ void unsupported() {
 CXX_NORETURN
 inline
 void throw_type_error() { throw type_error("typing error"); }
-
 CXX_NORETURN
 inline
 void implementation_error() { throw std::logic_error("implementation error"); }
@@ -140,9 +137,7 @@ T &down_cast(expr &e) {
 
   throw_type_error();
 }
-}  // namespace
-
-
+} // namespace
 namespace json = boost::json;
 
 using any_value = value_variant;
@@ -294,8 +289,6 @@ inteq(const value_variant& lhs, const value_variant& rhs)
 
 bool operator==(const value_variant& lhs, const value_variant& rhs)
 {
-  // \todo consider int64 and uint64 types
-
   bool       res = false;
 
   switch (lhs.index())
@@ -414,13 +407,9 @@ value_variant& value_variant::operator=(value_variant&& other)
   return *this;
 }
 
-
-
-
 //
-// AST class implementation
+// foundation classes
 // \{
-
 array::array(array &&other) : oper() {
   set_operands(std::move(other).move_operands());
 }
@@ -523,24 +512,26 @@ void error::accept(visitor &v) const { v.visit(*this); }
 void regex_match::accept(visitor &v) const { v.visit(*this); }
 #endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
 
-// to_json implementations
+// to_variant conversion
 template <class T>
 value_variant value_generic<T>::to_variant() const {
   return value();
 }
 
+
 value_variant null_value::to_variant() const { return value(); }
 
 // num_evaluated_operands implementations
-int oper::num_evaluated_operands() const { return size(); }
+int oper::num_evaluated_operands() const { return static_cast<int>(size()); }
 
-template <int MaxArity>
-int oper_n<MaxArity>::num_evaluated_operands() const {
+template <int MaxArity> int oper_n<MaxArity>::num_evaluated_operands() const {
   return std::min(MaxArity, oper::num_evaluated_operands());
 }
 
 struct forwarding_visitor : visitor {
-  void visit(const expr &) override {}  // error
+  virtual ~forwarding_visitor() = default;
+
+  void visit(const expr &) override {} // error
   void visit(const oper &n) override { visit(up_cast<expr>(n)); }
   void visit(const equal &n) override { visit(up_cast<oper>(n)); }
   void visit(const strict_equal &n) override { visit(up_cast<oper>(n)); }
@@ -659,7 +650,6 @@ oper::container_type translate_children(const json::array &children, variable_ma
 
 oper::container_type translate_children(const json::value &n, variable_map &, string_table&);
 /// \}
-
 array& mk_array()     { return deref(new array); }
 
 array_value& mk_array_value(std::vector<any_value> elems)
@@ -710,8 +700,7 @@ array &mk_array(const json::array &children, variable_map &m, string_table& stri
   return res;
 }
 
-template <class value_t>
-value_t &mk_value(typename value_t::value_type n) {
+template <class value_t> value_t &mk_value(typename value_t::value_type n) {
   return deref(new value_t(std::move(n)));
 }
 
@@ -722,7 +711,8 @@ using dispatch_table =
 
 dispatch_table::const_iterator lookup(const dispatch_table &m,
                                       const json::object &op) {
-  if (op.size() != 1) return m.end();
+  if (op.size() != 1)
+    return m.end();
 
   const json::string& key = op.begin()->key();
   std::string_view    keyvw(&*key.begin(), key.size());
@@ -857,8 +847,7 @@ oper::container_type translate_children(const json::value &n, variable_map &varm
   res.emplace_back(translate_internal(n, varmap, strings));
   return res;
 }
-}  // namespace
-
+} // namespace
 
 logic_rule create_logic(const json::value& n) {
   string_table strings;
@@ -868,8 +857,6 @@ logic_rule create_logic(const json::value& n) {
 
   return logic_rule(std::make_unique<logic_data>(std::move(node), varmap.to_vector(), std::move(strings), hasComputedVariables));
 }
-
-
 
 //
 // to value_base conversion
@@ -892,6 +879,7 @@ any_value to_value(const json::value &n); // \todo remove after moving to logic.
 /*
 any_value to_value(const json::array &) {
   oper::container_type elems;
+
 / *** TODO
   std::transform(val.begin(), val.end(), std::back_inserter(elems),
                  [](const json::value &el) -> any_value { return to_value(el); });
@@ -952,7 +940,6 @@ any_value to_value(const json::value &n) {
       unsupported();
   }
 
-  // assert(res.get());
   return res;
 }
 
@@ -972,7 +959,6 @@ struct not_int64_error : internal_coercion_error {};
 struct not_uint64_error : internal_coercion_error {};
 struct unpacked_array_req : internal_coercion_error {};
 
-
 template <class T>
 T from_string(std::string_view str, T el) {
   auto [ptr, err] = std::from_chars(str.data(), str.data() + str.size(), el);
@@ -987,14 +973,19 @@ T from_string(std::string_view str, T el) {
 
 /// conversion to int64
 /// \{
-inline std::int64_t to_concrete(std::int64_t v, const std::int64_t &) {
+[[maybe_unused]] inline std::int64_t to_concrete(std::int64_t v,
+                                                 const std::int64_t &) {
   return v;
 }
 inline std::int64_t to_concrete(std::string_view str, const std::int64_t &el) {
   return from_string(str, el);
 }
-inline std::int64_t to_concrete(double v, const std::int64_t &) { return v; }
-inline std::int64_t to_concrete(bool v, const std::int64_t &) { return v; }
+inline std::int64_t to_concrete(double v, const std::int64_t &) {
+  return static_cast<std::int64_t>(v);
+}
+inline std::int64_t to_concrete(bool v, const std::int64_t &) {
+  return static_cast<std::int64_t>(v);
+}
 inline std::int64_t to_concrete(std::nullptr_t, const std::int64_t &) {
   return 0;
 }
@@ -1005,20 +996,25 @@ inline std::int64_t to_concrete(std::uint64_t v, const std::int64_t &) {
     throw not_int64_error{};
   }
 
-  return v;
+  return static_cast<int64_t>(v);
 }
 /// \}
 
 /// conversion to uint64
 /// \{
-inline std::uint64_t to_concrete(std::uint64_t v, const std::uint64_t &) {
+[[maybe_unused]] inline std::uint64_t to_concrete(std::uint64_t v,
+                                                  const std::uint64_t &) {
   return v;
 }
 inline std::uint64_t to_concrete(std::string_view str, const std::uint64_t &el) {
   return from_string(str, el);
 }
-inline std::uint64_t to_concrete(double v, const std::uint64_t &) { return v; }
-inline std::uint64_t to_concrete(bool v, const std::uint64_t &) { return v; }
+inline std::uint64_t to_concrete(double v, const std::uint64_t &) {
+  return static_cast<std::uint64_t>(v);
+}
+inline std::uint64_t to_concrete(bool v, const std::uint64_t &) {
+  return static_cast<std::uint64_t>(v);
+}
 inline std::uint64_t to_concrete(std::nullptr_t, const std::uint64_t &) {
   return 0;
 }
@@ -1029,7 +1025,7 @@ inline std::uint64_t to_concrete(std::int64_t v, const std::uint64_t &) {
     throw not_uint64_error{};
   }
 
-  return v;
+  return static_cast<std::uint64_t>(v);
 }
 /// \}
 
@@ -1038,15 +1034,23 @@ inline std::uint64_t to_concrete(std::int64_t v, const std::uint64_t &) {
 inline double to_concrete(std::string_view str, const double &el) {
   return from_string(str, el);
 }
-inline double to_concrete(std::int64_t v, const double &) { return v; }
-inline double to_concrete(std::uint64_t v, const double &) { return v; }
-inline double to_concrete(double v, const double &) { return v; }
-inline double to_concrete(bool v, const double &) { return v; }
-inline double to_concrete(std::nullptr_t, const double &) { return 0; }
+inline double to_concrete(std::int64_t v, const double &) {
+  return static_cast<double>(v);
+}
+inline double to_concrete(std::uint64_t v, const double &) {
+  return static_cast<double>(v);
+}
+[[maybe_unused]] inline double to_concrete(double v, const double &) {
+  return v;
+}
+
+inline double to_concrete(bool v, const double &) {
+  return static_cast<double>(v);
+}
+[[maybe_unused]] inline double to_concrete(std::nullptr_t, const double &) {
+  return 0;
+}
 /// \}
-
-
-
 
 /// conversion to string
 /// \{
@@ -1059,7 +1063,7 @@ inline std::string_view to_concrete(bool v, const std::string_view &, string_tab
 
   return bool_string[v];
 }
-inline std::string_view to_concrete(const std::string_view &s, const std::string_view &, string_table&) {
+[[maybe_unused]] inline std::string_view to_concrete(const std::string_view &s, const std::string_view &, string_table&) {
   return s;
 }
 inline std::string_view to_concrete(std::nullptr_t, const std::string_view &, string_table&) {
@@ -1073,21 +1077,24 @@ inline std::string_view to_concrete(std::nullptr_t, const std::string_view &, st
 ///   implements truthy, falsy as described by https://jsonlogic.com/truthy.html
 /// \{
 inline bool to_concrete(bool v, const bool &) { return v; }
-inline bool to_concrete(std::int64_t v, const bool &) { return v; }
-inline bool to_concrete(std::uint64_t v, const bool &) { return v; }
-inline bool to_concrete(double v, const bool &) { return v; }
+inline bool to_concrete(std::int64_t v, const bool &) {
+  return static_cast<bool>(v);
+}
+inline bool to_concrete(std::uint64_t v, const bool &) {
+  return static_cast<bool>(v);
+}
+inline bool to_concrete(double v, const bool &) { return static_cast<bool>(v); }
 inline bool to_concrete(const std::string_view &v, const bool &) {
   return v.size() != 0;
 }
 inline bool to_concrete(std::nullptr_t, const bool &) { return false; }
 
-// \todo logical_not sure if conversions from arrays to values should be
+// \todo not sure if conversions from arrays to values should be
 // supported like this
 inline bool to_concrete(array_value const* arr, const bool &) {
   return arr->value().size();
 }
 /// \}
-
 }
 
 
@@ -1110,10 +1117,8 @@ U to_concrete_(T&& v, const U& u, string_table& strings)
     return to_concrete(std::forward<T>(v), u, strings);
 }
 
-
-
 struct comparison_operator_base {
-  enum {
+  enum : bool {
     defined_for_string = true,
     defined_for_real = true,
     defined_for_integer = true,
@@ -1125,10 +1130,7 @@ struct comparison_operator_base {
   using result_type = bool;
 };
 
-template <class T>
-T to_calc_type(const T *val) {
-  return *val;
-}
+template <class T> T to_calc_type(const T *val) { return *val; }
 
 std::string_view to_calc_type(const std::string_view *val) {
   return *val;
@@ -1455,7 +1457,7 @@ struct relational_operator : relational_operator_base,
 
 // Arith
 struct arithmetic_operator : numeric_binary_operator_base {
-  enum {
+  enum : bool {
     defined_for_string = false,
     defined_for_real = true,
     defined_for_integer = true,
@@ -1505,7 +1507,7 @@ struct arithmetic_operator : numeric_binary_operator_base {
 };
 
 struct integer_arithmetic_operator : arithmetic_operator {
-  enum {
+  enum : bool {
     defined_for_string = false,
     defined_for_real = false,
     defined_for_integer = true,
@@ -1518,7 +1520,7 @@ struct integer_arithmetic_operator : arithmetic_operator {
 };
 
 struct string_operator_non_destructive {
-  enum {
+  enum : bool {
     defined_for_string = true,
     defined_for_real = false,
     defined_for_integer = false,
@@ -1536,7 +1538,7 @@ struct string_operator_non_destructive {
 };
 
 struct array_operator {
-  enum {
+  enum : bool {
     defined_for_string = false,
     defined_for_real = false,
     defined_for_integer = false,
@@ -1561,14 +1563,14 @@ struct arithmetic_converter {
 
   any_value operator()(std::nullptr_t)  const { return nullptr; }
 
-  // defined for the following types
+    // defined for the following types
   any_value operator()(std::int64_t v)  const { return v; }
   any_value operator()(std::uint64_t v) const { return v; }
   any_value operator()(double v)        const { return v; }
 
   any_value operator()(bool)            const { return nullptr; /* correct? */ }
 
-  // need to convert values
+    // need to convert values
   any_value operator()(std::string_view v) const {
     const double        dblval = to_concrete(v, double{});
     const std::int64_t  intval = dblval;
@@ -1590,7 +1592,7 @@ struct arithmetic_converter {
 
 any_value convert(any_value val, string_table&, const arithmetic_operator &) {
   return std::visit(arithmetic_converter{}, val);
-}
+  }
 
 
 struct string_converter {
@@ -1636,6 +1638,7 @@ std::string_view convert(any_value val, string_table& strings, const string_oper
       return v->copy();
     }
 
+
     // need to move value_base to new array
     result_type operator()(std::string_view v) const    { return to_array(to_value(v)); }
     result_type operator()(bool v) const                { return to_array(to_value(v)); }
@@ -1657,7 +1660,7 @@ struct unpacker {
     template <class U>
     value_t conv(const value_t &lhs, const U &val) const {
       return to_concrete_(val, lhs, strings);
-    }
+  }
 
     template <class T>
     CXX_NORETURN
@@ -1701,7 +1704,6 @@ T unpack_value(any_value el, string_table& strings) {
   return std::visit(unpacker<T>{strings}, el);
 }
 
-
 //
 // Json Logic - truthy/falsy
 
@@ -1711,7 +1713,7 @@ bool truthy(const any_value &el)
   empty_string_table tmp; // will not be used
 
   return unpack_value<bool>(el, tmp);
-}
+  }
 
 bool falsy(const any_value &el) { return !truthy(el); }
 
@@ -1722,9 +1724,7 @@ namespace {
 
 template <class T, class fn_t, class alt_fn_t>
 auto with_type(any_value& v, fn_t fn, alt_fn_t altfn) -> decltype(altfn()) {
-  T* casted = std::get_if<T>(&v);
-
-  if (casted)
+  if (T* casted = std::get_if<T>(&v))
     return fn(*casted);
 
   return altfn();
@@ -1743,6 +1743,7 @@ struct binary_operator_visitor_2 { // : forwarding_visitor {
   template <class rhs_value_t>
   result_type calc(rhs_value_t rv) const {
     auto [ll, rr] = op.coerce(lv, rv);
+
     //~ std::cerr << lv << " -- " << rv << " " << typeid(ll).name()
               //~ << std::endl;
     return op(std::move(ll), std::move(rr));
@@ -1831,6 +1832,7 @@ struct binary_operator_visitor_2 { // : forwarding_visitor {
 
     throw_type_error();
   }
+
 
  private:
   lhs_value_t lv;
@@ -1976,7 +1978,7 @@ bool compare_sequence(variant_span lv, variant_span rv, binary_predicate_t pred)
     res = pred(lsz, rsz);
 
   return res;
-}
+  }
 
 
 template <class binary_predicate_t>
@@ -2304,7 +2306,6 @@ struct operator_impl<logical_not_not> {
 template <>
 struct operator_impl<cat> : string_operator_non_destructive {
   using string_operator_non_destructive::result_type;
-
   explicit
   operator_impl(string_table& strtab)
   : string_operator_non_destructive(), strings(strtab)
@@ -2320,7 +2321,6 @@ struct operator_impl<cat> : string_operator_non_destructive {
 
     return to_value(strings.safe_string(std::move(tmp)));
   }
-
   string_table& strings;
 };
 
@@ -2353,8 +2353,7 @@ struct operator_impl<regex_match>
 };
 #endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
 
-template <>
-struct operator_impl<merge> : array_operator {
+template <> struct operator_impl<merge> : array_operator {
   using array_operator::result_type;
 
   result_type operator()(const variant_span ll, const variant_span rr) const {
@@ -2368,7 +2367,6 @@ struct operator_impl<merge> : array_operator {
     return &mk_array_value(std::move(values));
   }
 };
-
 using variant_logger = std::function<void(const value_variant&)>;
 
 struct evaluator : forwarding_visitor {
@@ -2487,6 +2485,7 @@ struct sequence_function {
                       if (pkey->size() == 0)
                         return elem;
 #if OBSOLETE
+
                       try {
                         object_value &o = down_cast<object_value>(**elptr);
 
@@ -2552,6 +2551,7 @@ struct sequence_reduction {
                       if (*pkey == "current") return elem;
                       if (*pkey == "accumulator") return accu;
                     }
+
                     return to_value(nullptr);
                   },
                   strings,
@@ -2773,7 +2773,7 @@ void evaluator::visit(const membership &n) {
     auto const   lim = spn.end();
 
     return std::find(spn.begin(), lim, lhs) != lim;
-  };
+    };
 
   auto string_op = [&lhs, &rhs]() -> any_value {
     try {
@@ -2842,7 +2842,6 @@ void evaluator::visit(const reduce &n) {
 
   calcres = with_type<array_value const*>(arr, op, mkInvalid);
 }
-
 array_value const*
 empty_array_value() { return &mk_array_value(); }
 
@@ -2891,7 +2890,7 @@ void evaluator::visit(const all &n) {
   auto all_of = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
                 (array_value const* v) -> bool {
     variant_span spn = element_range(v);
-    expr &expr = n.operand(1);
+  expr &expr = n.operand(1);
 
     return std::all_of( spn.begin(), spn.end(),
                         sequence_predicate{expr, *string_store, *calclogger}
@@ -2909,7 +2908,7 @@ void evaluator::visit(const none &n) {
   auto none_of = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
                  (array_value const* v) -> bool {
     variant_span spn = element_range(v);
-    expr &expr = n.operand(1);
+  expr &expr = n.operand(1);
 
     return std::none_of( spn.begin(), spn.end(),
                          sequence_predicate{expr, *string_store, *calclogger}
@@ -2927,7 +2926,7 @@ void evaluator::visit(const some &n) {
   auto any_of = [&n, &arr, string_store = &this->strings, calclogger = &this->logger]
                 (array_value const* v) -> bool {
     variant_span spn = element_range(v);
-    expr &expr = n.operand(1);
+  expr &expr = n.operand(1);
 
     return std::any_of( spn.begin(), spn.end(),
                         sequence_predicate{expr, *string_store, *calclogger}
@@ -3044,7 +3043,6 @@ void evaluator::visit(const log &n) {
 
   logger(calcres);
 }
-
 void evaluator::visit(const array_value &n) { calcres = new array_value(n); }
 
 void evaluator::visit(const null_value &n) { _value(n); }
@@ -3130,8 +3128,6 @@ variable_accessor variant_accessor(std::vector<value_variant> vars) {
     throw std::logic_error{"unable to access (computed) variable"};
   };
 }
-
-
 
 std::ostream& operator<<(std::ostream& os, const value_variant& val)
 {
@@ -3223,7 +3219,7 @@ struct value_printer : forwarding_visitor {
   std::ostream &os;
 };
 
-}  // namespace
+} // namespace
 
 std::ostream &operator<<(std::ostream &os, any_expr &n) {
   value_printer prn{os};
@@ -3256,7 +3252,6 @@ bool logic_rule::has_computed_variable_names() const {
 }
 
 any_value logic_rule::apply() { return jsonlogic::apply(*data); }
-
 
 any_value logic_rule::apply(const variable_accessor &var_accessor) {
   return jsonlogic::apply(*data, var_accessor);
@@ -3351,16 +3346,12 @@ struct SAttributeTraversal : visitor {
  private:
   visitor &sub;
 
-  template <class OperatorNode>
-  inline void _visit(OperatorNode &n) {
+  template <class OperatorNode> inline void _visit(OperatorNode &n) {
     traverseChildren(*this, n);
     sub.visit(n);
   }
 
-  template <class ValueNode>
-  inline void _value(ValueNode &n) {
-    sub.visit(n);
-  }
+  template <class ValueNode> inline void _value(ValueNode &n) { sub.visit(n); }
 };
 
 void SAttributeTraversal::visit(expr &) { throw_type_error(); }
@@ -3414,7 +3405,7 @@ void SAttributeTraversal::visit(real_value &n) { _value(n); }
 void SAttributeTraversal::visit(string_value &n) { _value(n); }
 
 void SAttributeTraversal::visit(error &n) { sub.visit(n); }
-}  // namespace
+} // namespace
 
 /// AST traversal function that calls v's visit methods in post-fix
 /// order

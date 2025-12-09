@@ -43,7 +43,7 @@ option(JSONLOGIC_ENABLE_TESTS "Build the test code" ON)
 
 add_library(jsonlogic SHARED ${CMAKE_CURRENT_SOURCE_DIR}/src/logic.cc)
 target_include_directories(jsonlogic PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_compile_options(jsonlogic PUBLIC -Wall -Wextra -pedantic)
+target_compile_options(jsonlogic PRIVATE -Wall -Wextra -pedantic)
 
 target_link_libraries(jsonlogic LINK_PUBLIC Boost::json)
 
@@ -59,14 +59,49 @@ install(FILES include/jsonlogic/details/ast-full.hpp DESTINATION "include/jsonlo
 if(JSONLOGIC_ENABLE_BENCH)
     message(STATUS "Building benchmarks: ${JSONLOGIC_ENABLE_BENCH}")
     add_subdirectory(bench)
+    add_custom_target(bench
+        DEPENDS jl-bench-eq jl-bench-membership jl-bench-generic
+    )
 endif()
 if(JSONLOGIC_ENABLE_TESTS)
     message(STATUS "Building tests: ${JSONLOGIC_ENABLE_TESTS}")
+    include(CTest)
+    
+    # Enable parallel testing by default
+    include(ProcessorCount)
+    ProcessorCount(N)
+    if(NOT N EQUAL 0)
+        set(CTEST_BUILD_FLAGS -j${N})
+        set(ctest_test_args ${ctest_test_args} PARALLEL_LEVEL ${N})
+    endif()
     add_subdirectory(tests)
 endif()
 
-add_custom_target(test
-    COMMAND ${CMAKE_COMMAND} -E env bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-tests.sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/json
-    COMMENT "Running tests with run_tests.sh"
+# Create symlink to compile_commands.json for clangd
+set(COMPILE_COMMANDS_SOURCE "${CMAKE_BINARY_DIR}/compile_commands.json")
+set(COMPILE_COMMANDS_LINK "${CMAKE_SOURCE_DIR}/build/compile_commands.json")
+
+# Ensure the build directory exists
+file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
+
+# Create or update the symlink
+if(EXISTS "${COMPILE_COMMANDS_SOURCE}")
+    # Remove existing symlink/file if it exists
+    if(EXISTS "${COMPILE_COMMANDS_LINK}")
+        file(REMOVE "${COMPILE_COMMANDS_LINK}")
+    endif()
+    
+    # Create new symlink
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E create_symlink 
+                "${COMPILE_COMMANDS_SOURCE}"
+                "${COMPILE_COMMANDS_LINK}"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/build"
+        RESULT_VARIABLE symlink_result
 )
-add_dependencies(test testeval)
+    if(symlink_result EQUAL 0)
+        message(STATUS "Created symlink: ${COMPILE_COMMANDS_LINK} -> ${COMPILE_COMMANDS_SOURCE}")
+    else()
+        message(WARNING "Failed to create compile_commands.json symlink")
+    endif()
+endif()

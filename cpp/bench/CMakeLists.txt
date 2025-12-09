@@ -3,6 +3,7 @@
 # project(jl-bench-eqs)
 
 # set(CMAKE_BUILD_TYPE Debug)
+include(FetchContent)
 set(BUILD_TESTING OFF) # Disable Faker tests
 FetchContent_Declare(faker
     GIT_REPOSITORY https://github.com/cieslarmichal/faker-cxx.git
@@ -10,6 +11,12 @@ FetchContent_Declare(faker
 )
 
 FetchContent_MakeAvailable(faker)
+FetchContent_Declare(
+  cxxopts
+  GIT_REPOSITORY https://github.com/jarro2783/cxxopts.git
+  GIT_TAG        v3.3.1
+)
+FetchContent_MakeAvailable(cxxopts)
 
 add_executable(jl-bench-eq src/benchmark-equality.cpp)
 add_compile_options(-Wall -Wextra -Wunused-variable)
@@ -60,26 +67,19 @@ target_include_directories(jl-bench-membership SYSTEM PRIVATE
 
 target_link_libraries(jl-bench-membership PRIVATE jsonlogic faker-cxx)
 
-# target_include_directories(jl-bench-membership SYSTEM PRIVATE
-#     ${CMAKE_BINARY_DIR}/_deps/faker-src/include
-# )
-
-add_executable(jl-bench-complex1 src/benchmark-complex1.cpp)
-target_compile_options(jl-bench-complex1 PRIVATE -O3)
-target_include_directories(jl-bench-complex1 SYSTEM PRIVATE
+add_executable(jl-bench-generic src/benchmark-generic.cpp)
+target_include_directories(jl-bench-generic SYSTEM PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../bench/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
 
-configure_file(${CMAKE_SOURCE_DIR}/bench/src/complex1.json ${CMAKE_BINARY_DIR}/bench/complex1.json COPYONLY)
-target_link_libraries(jl-bench-complex1 PRIVATE jsonlogic faker-cxx)
+target_link_libraries(jl-bench-generic PRIVATE faker-cxx jsonlogic cxxopts)
+target_compile_features(jl-bench-generic PRIVATE cxx_std_20)
+target_compile_options(jl-bench-generic PRIVATE -O3)
 
-add_executable(jl-bench-simple-and src/benchmark-simple-and.cpp)
-target_compile_options(jl-bench-simple-and PRIVATE -O3)
-target_include_directories(jl-bench-simple-and SYSTEM PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../bench/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../include
-)
-
-configure_file(${CMAKE_SOURCE_DIR}/bench/src/simple-and.json ${CMAKE_BINARY_DIR}/bench/simple-and.json COPYONLY)
-target_link_libraries(jl-bench-simple-and PRIVATE jsonlogic faker-cxx)
+# Copy all .json files from bench/src to the build directory's bench folder
+file(GLOB BENCH_JSON_FILES "${CMAKE_SOURCE_DIR}/bench/src/*.json")
+foreach(jsonfile ${BENCH_JSON_FILES})
+    get_filename_component(jsonfile_name "${jsonfile}" NAME)
+    configure_file(${jsonfile} ${CMAKE_BINARY_DIR}/bench/${jsonfile_name} COPYONLY)
+endforeach()

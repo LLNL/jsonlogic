@@ -200,14 +200,14 @@ struct modulo : oper_n<2> {
 //   steps.
 // The class is final and it supports move ctor/assignment, so the data
 //   can move efficiently.
+
 struct array final : oper  // array is modeled as operator
 {
   void accept(visitor &) const final;
 
   array() = default;
-
-  array(array &&);
-  array &operator=(array &&);
+  array(array &&other);
+  array &operator=(array &&other);
 };
 
 struct map : oper_n<2> {

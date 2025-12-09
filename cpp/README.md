@@ -8,13 +8,25 @@ The library is designed to follow the type conversion rules of the reference Jso
 ## Compile and Install
 
 The library can be installed using cmake. From the top-level directory,
-    cmake --preset=default
-    cd build/release
+```
+cmake --preset=default
+cd build/release
     make
+```
+Benchmarks can be made with
+```
+make bench
+```
+
+Tests can be run with
+```
+make testeval && make test
+```
 
 ## Use
 
 The simplest way is to create Json rule and data options and call jsonlogic::apply.
+
 ```cpp
     #include <jsonlogic/logic.hpp>
 

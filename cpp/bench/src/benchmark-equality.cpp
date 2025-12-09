@@ -7,7 +7,6 @@
 #include <faker-cxx/location.h>
 #include <faker-cxx/number.h>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <jsonlogic/logic.hpp>
 #include <string>
@@ -51,24 +50,25 @@ private:
 dynamic_lib compile_and_load(const std::string &code,
                              const std::string &libname) {
   // Step 1: Write code to a temporary file.
-  // There is still a very minor risk of a race condition here, but
-  // it would require guessing the name of the file and creating it
-  // before the ofstream sourceFile statement a few lines down.
-  const std::string tempSourceFile = tmpnam(nullptr) + std::string{".cpp"};
+  char template_name[] = "/tmp/temp_XXXXXX.cpp";
+  int fd = mkstemps(template_name, 4);
+  if (fd == -1) {
+    throw std::runtime_error("Failed to create temporary source file");
+  }
+  ssize_t written = write(fd, code.c_str(), code.length());
+  close(fd);
 
-  std::ofstream sourceFile{tempSourceFile};
-  if (!sourceFile)
-    throw std::runtime_error{"Unable to create temporary source file."};
-
-  sourceFile << code;
-  sourceFile.close();
+  if (written != static_cast<ssize_t>(code.length())) {
+    std::remove(template_name); // Clean up on failure
+    throw std::runtime_error("Failed to write to temporary source file");
+  }
 
   // Step 2: Compile the source file into a shared object
   std::string inclDirs = RUNTIME_INCLUDES; // RUNTIME_INCLUDES is a macro
 
   std::string compileCommand =
       "g++ -Wall -Wextra -O3 -march=native -std=c++17 -shared -fPIC " +
-      inclDirs + " -o " + libname + " " + tempSourceFile;
+      inclDirs + " -o " + libname + " " + template_name;
 
   std::cerr << compileCommand << std::endl;
 
@@ -76,7 +76,7 @@ dynamic_lib compile_and_load(const std::string &code,
   if (compileResult != 0)
     throw std::runtime_error{"Compilation failed."};
 
-  std::remove(tempSourceFile.c_str());
+  std::remove(template_name);
 
   std::filesystem::path currentPath = std::filesystem::current_path();
   std::string fullPath = currentPath / libname;
