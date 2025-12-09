@@ -1,5 +1,7 @@
 # JsonLogic for C++
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/LLNL/jsonlogic)
+
 This is an implementation for [JsonLogic](https://jsonlogic.com/) for C++. The API uses the Boost JSON implementation (e.g.,
 [Boost 1.82](https://www.boost.org/doc/libs/1_82_0/libs/json/doc/html/index.html)).
 

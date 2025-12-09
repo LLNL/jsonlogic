@@ -1,13 +1,13 @@
 #include <boost/json.hpp>
 #include <boost/json/src.hpp>
 #include <boost/lexical_cast.hpp>
-#include <boost/range/adaptor/transformed.hpp>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <jsonlogic/logic.hpp>
 #include <sstream>
 #include <vector>
+#include <ranges>
 
 enum class ResultStatus : std::uint8_t {
   NoError = 0,  // no error
@@ -210,9 +210,8 @@ std::string call_apply(settings &config, const bjsn::value &rule,
 
       // extract all variable values into vector
       auto const varvalues =
-          logic.variable_names() | boost::adaptors::transformed(value_maker);
-
-      // NOTE: data's lifetime must extend beyond the call to apply.
+          logic.variable_names() | std::views::transform(value_maker);        
+          
       return variant_to_string(logic.apply(value_vector(varvalues.begin(), varvalues.end())));
     } catch (...) {
     }

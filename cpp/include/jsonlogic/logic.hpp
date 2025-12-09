@@ -5,6 +5,17 @@
 
 #include "managed_string_view.hpp"
 
+#if !defined(WITH_JSONLOGIC_EXTENSIONS)
+// turn on to enable regex matching
+#define WITH_JSONLOGIC_EXTENSIONS 1
+#endif /* !defined(WITH_JSONLOGIC_EXTENSIONS) */
+
+#if !defined(ENABLE_OPTIMIZATIONS)
+// enables experimental optimizations
+#define ENABLE_OPTIMIZATIONS 1
+#endif /* !defined(ENABLE_OPTIMIZATIONS) */
+
+
 namespace jsonlogic {
 
 //
@@ -146,7 +157,6 @@ bool falsy(const value_variant &el);
 
 /// prints out \p n to \p os
 /// \pre n must be a value
-// std::ostream &operator<<(std::ostream &os, any_expr &n);
 std::ostream &operator<<(std::ostream &os, const value_variant &n);
 
 /// result type of create_logic
@@ -206,6 +216,23 @@ struct logic_rule {
 ///   on variables inside the jsonlogic expression.
 logic_rule create_logic(const boost::json::value& n);
 
-
-
 } // namespace jsonlogic
+
+
+namespace std
+{
+  template <>
+  struct hash<jsonlogic::value_variant_base> {
+    size_t operator()(const jsonlogic::value_variant_base& v) const;
+  };
+
+  template <>
+  struct hash<jsonlogic::value_variant> {
+    size_t operator()(const jsonlogic::value_variant& v) const;
+  };
+
+  template <>
+  struct hash<jsonlogic::array_value> {
+    size_t operator()(const jsonlogic::array_value& v) const;
+  };
+};

@@ -10,10 +10,9 @@
 #include <limits>
 #include <numeric>
 #include <string>
-#include <unordered_map>
 #include <charconv>
 #include <span>
-#include <set> // alternatives are <deque>, <forward_list>
+#include <ranges>
 
 #if WITH_JSON_LOGIC_CPP_EXTENSIONS
 #include <regex>
@@ -27,20 +26,12 @@
 #include "jsonlogic/details/cxx-compat.hpp"
 
 namespace {
-[[maybe_unused]] constexpr bool DEBUG_OUTPUT = false;
+CXX_MAYBE_UNUSED constexpr bool DEBUG_OUTPUT = false;
 constexpr int COMPUTED_VARIABLE_NAME = -1;
 
-#if DEBUGGING_SUPPORT
-struct DebugGuard
-{
-  DebugGuard(const char* m) : msg(m) { std::cerr << "enter " << msg << std::endl; }
-  ~DebugGuard() { std::cerr << "exit  " << msg << std::endl; }
-
-  const char* msg = "none";
-};
-#endif /* DEBUGGING_SUPPORT */
 
 }  // namespace
+
 
 
 namespace jsonlogic {
@@ -136,7 +127,6 @@ T &down_cast(expr &e) {
   throw_type_error();
 }
 } // namespace
-
 
 namespace json = boost::json;
 
@@ -329,10 +319,150 @@ bool operator==(const value_variant& lhs, const value_variant& rhs)
   return res;
 }
 
-namespace
+
+std::size_t leftRotate(std::size_t n, std::size_t d) { //rotate n by d bits
+     return (n << d)|(n >> (sizeof(n)*CHAR_BIT - d));
+}
+
+}
+
+
+// overload std::hash for jsonlogic types
+namespace std 
+{  
+  size_t 
+  hash<jsonlogic::array_value>::operator()(const jsonlogic::array_value& v) const {
+    auto values = v.value() | std::views::transform(std::hash<jsonlogic::value_variant>{});        
+    
+    // C++23: return std::ranges::fold_left(values, size_t(0), std::plus<size_t>{});
+    return std::accumulate(values.begin(), values.end(), size_t(0), std::plus<size_t>{});
+  }
+  
+  size_t 
+  hash<jsonlogic::value_variant_base>::operator()(const jsonlogic::value_variant_base& v) const {
+    // Use the variant index as part of the hash to distinguish between
+    // different types that might hash to the same value
+    size_t const index_hash = hash<size_t>{}(v.index());
+    size_t       value_hash = 0;
+    
+    switch (v.index()) {
+      case jsonlogic::mono_variant: 
+      case jsonlogic::null_variant: 
+        // identified through their index type
+        break;
+  
+      case jsonlogic::bool_variant: 
+        value_hash = std::hash<bool>{}(std::get<bool>(v));
+        break;
+  
+      case jsonlogic::sint_variant: 
+        value_hash = std::hash<int64_t>{}(std::get<int64_t>(v));
+        break;
+      
+      case jsonlogic::uint_variant: 
+        value_hash = std::hash<uint64_t>{}(std::get<uint64_t>(v));
+        break;
+  
+      case jsonlogic::real_variant: 
+        value_hash = std::hash<double>{}(std::get<double>(v));
+        break;
+  
+      case jsonlogic::strv_variant: 
+        value_hash = std::hash<string_view>{}(std::get<jsonlogic::managed_string_view>(v));
+        break;
+  
+      case jsonlogic::sequ_variant: 
+        value_hash = std::hash<jsonlogic::array_value>{}(*std::get<jsonlogic::array_value const*>(v));
+        break;
+  
+      default:
+        jsonlogic::implementation_error();
+    }
+    
+    return index_hash + jsonlogic::leftRotate(value_hash, 1);
+  }
+  
+  size_t 
+  hash<jsonlogic::value_variant>::operator()(const jsonlogic::value_variant& v) const {
+    return std::hash<jsonlogic::value_variant_base>{}(v);
+  }
+} // namespace std
+
+
+namespace jsonlogic
 {
+namespace
+{  
+  /// functor testing if a jsonlogic expression can be converted to a variant representation.
+  struct convertible_to_value_variant
+  {
+    auto operator()(const expr &) const -> bool { return false; }
+  
+    template <class T>  
+    auto operator()(const T &) const -> decltype(std::declval<T>().to_variant(), bool{}) {
+      return true;
+    }
+  };
+  
+  /// returns true iff e can be converted to a value_variant 
+  /// (without deep analysis or constant folding).
+  bool not_convertible_to_value_variant(const any_expr& e)
+  {
+    return !generic_visit(convertible_to_value_variant{}, e.get());
+  }
+  
+  /// functor converting jsonlogic expression a variant representation.
+  /// \details
+  ///   the functor throws an std::logic_error if the conversion cannot be performed.
+  struct value_variant_conversion
+  {
+    CXX_NORETURN
+    auto operator()(const expr &) const -> value_variant
+    { 
+      implementation_error(); 
+    }
+  
+    template <class T>  
+    auto operator()(const T &o) const -> decltype(std::declval<T>().to_variant(), value_variant{}) const {
+      return o.to_variant();
+    }
+  };
+  
+  /// returns the value_variant in \p e, or throws an exception if the
+  ///   expression does not have value_variant representation.
+  value_variant as_value_variant(const any_expr& e)
+  {
+    return generic_visit(value_variant_conversion{}, e.get());
+  }
+  
+  /// converts an array in \p e to an unordered_set
+  ///   for more efficient lookup. Returns an empty set if the
+  ///   conversion is not possible, either due to \p e not
+  ///   representing an array (i.e., a string), or by the 
+  ///   array members not being constant.
+  /// \param  e a json_logic expression
+  /// \result a set with value_variant if all elements in e's array
+  ///         are convertible to value_variant.
+  std::unordered_set<value_variant> 
+  try_static_set(const any_expr& e)
+  {
+    const array* arr = may_down_cast<array>(deref(e.get()));
+    if (arr == nullptr)
+      return {};
+      
+    const oper::container_type& elems = arr->operands();
+    auto const beg = elems.begin();
+    auto const lim = elems.end();
+    
+    if (auto pos = std::find_if(beg, lim, not_convertible_to_value_variant); pos != lim)
+      return {};
+      
+    auto values = elems | std::views::transform(as_value_variant);
+    
+    return std::unordered_set<value_variant>(values.begin(), values.end());
+  }
+  
   array_value& mk_array_value(std::vector<any_value> elems = {});
-  //~ array_view& mk_array_view(const array_value& elems);
 
   void delete_array(value_variant_base& val)
   {
@@ -445,23 +575,22 @@ array_value::to_variant() const
   return this;
 }
 
-
-
-#if 0
-
-
-array_value::container_type const&
-array_view::value() const
-{
-  return arr.value();
+#if ENABLE_OPTIMIZATIONS
+void 
+opt_membership_array::set_elems(std::unordered_set<value_variant> els) 
+{ 
+  elements = std::move(els); 
 }
 
-const array_view*
-array_view::copy() const
-{
-  return &mk_array_view(arr);
+std::unordered_set<value_variant> const& 
+opt_membership_array::elems() const 
+{ 
+  return elements;
 }
-#endif
+#endif /*ENABLE_OPTIMIZATIONS*/
+
+
+
 
 // accept implementations
 void equal::accept(visitor &v) const { v.visit(*this); }
@@ -515,6 +644,11 @@ void error::accept(visitor &v) const { v.visit(*this); }
 #if WITH_JSON_LOGIC_CPP_EXTENSIONS
 void regex_match::accept(visitor &v) const { v.visit(*this); }
 #endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
+
+#if ENABLE_OPTIMIZATIONS
+void opt_membership_array::accept(visitor &v) const { v.visit(*this); }
+#endif /*ENABLE_OPTIMIZATIONS*/
+
 
 // to_variant conversion
 template <class T>
@@ -590,8 +724,13 @@ struct forwarding_visitor : visitor {
 
 #if WITH_JSON_LOGIC_CPP_EXTENSIONS
   // extensions
-  void visit(const regex_match &n) override { visit(up_cast<expr>(n)); }
+  void visit(const regex_match &n) override { visit(up_cast<oper>(n)); }
 #endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
+
+#if ENABLE_OPTIMIZATIONS
+  // optimizations
+  void visit(const opt_membership_array &n) override { visit(up_cast<oper>(n)); }
+#endif /* ENABLE_OPTIMIZATIONS */
 };
 
 namespace {
@@ -667,18 +806,43 @@ array_value& mk_array_value(std::vector<any_value> elems)
 //~ }
 
 template <class ExprT>
-ExprT &mk_operator_(const json::object &n, variable_map &m) {
-  assert(n.size() == 1);
-
+ExprT &mk_operator_(oper::container_type args) {
   ExprT &res = deref(new ExprT);
 
-  res.set_operands(translate_children(n.begin()->value(), m));
+  res.set_operands(std::move(args));
   return res;
+}
+
+template <class ExprT>
+ExprT &mk_operator_(const json::object &n, variable_map &m) {
+  assert(n.size() == 1);
+  return mk_operator_<ExprT>(translate_children(n.begin()->value(), m));
 }
 
 template <class ExprT>
 expr &mk_operator(const json::object &n, variable_map &m) {
   return mk_operator_<ExprT>(n, m);
+}
+
+/// creates and optimized membership tests for static arrays
+///   and returns a "normal" membership test if the optimization
+///   is not possible or disabled.
+expr &mk_membership_opt(const json::object &n, variable_map &m)
+{
+  oper::container_type args = translate_children(n.begin()->value(), m);
+  
+#if ENABLE_OPTIMIZATIONS      
+  if (std::unordered_set<value_variant> elems = try_static_set(args.back()); elems.size() != 0)
+  {
+    args.pop_back();
+    opt_membership_array &res = mk_operator_<opt_membership_array>(std::move(args));
+    
+    res.set_elems(std::move(elems));
+    return res;
+  }
+#endif /*ENABLE_OPTIMIZATIONS*/
+
+  return mk_operator_<membership>(std::move(args));
 }
 
 template <class ExprT>
@@ -753,7 +917,7 @@ any_expr translate_internal(const json::value& n, variable_map &varmap) {
       {"none", &mk_operator<none>},
       {"some", &mk_operator<some>},
       {"merge", &mk_operator<merge>},
-      {"in", &mk_operator<membership>},
+      {"in", &mk_membership_opt},      
       {"cat", &mk_operator<cat>},
       {"log", &mk_operator<log>},
       {"var", &mk_variable},
@@ -872,27 +1036,9 @@ any_value to_value(std::int64_t val) { return val; }
 any_value to_value(std::uint64_t val) { return val; }
 any_value to_value(double val) { return val; }
 any_value to_value(managed_string_view val) { return val; }
-// any_value to_value(const array_value& val) { return &mk_array_view(val); }
-
-//~ no longer supported
-//~ any_expr to_value(json::string val) {
-  //~ return any_expr(new string_value(safe_string(val.begin(), val.end())));
-//~ }
 
 any_value to_value(const json::value &n); // \todo remove after moving to logic.hpp
 
-/*
-any_value to_value(const json::array &) {
-  oper::container_type elems;
-/ *** TODO
-  std::transform(val.begin(), val.end(), std::back_inserter(elems),
-                 [](const json::value &el) -> any_value { return to_value(el); });
-  array &arr = mk_array();
-
-  arr.set_operands(std::move(elems));
-  return &arr;
-}
-*/
 
 any_value to_value(const json::value &n) {
   any_value res;
@@ -978,7 +1124,7 @@ T from_string(std::string_view str, T el) {
 
 /// conversion to int64
 /// \{
-[[maybe_unused]] inline std::int64_t to_concrete(std::int64_t v,
+CXX_MAYBE_UNUSED inline std::int64_t to_concrete(std::int64_t v,
                                                  const std::int64_t &) {
   return v;
 }
@@ -1007,7 +1153,7 @@ inline std::int64_t to_concrete(std::uint64_t v, const std::int64_t &) {
 
 /// conversion to uint64
 /// \{
-[[maybe_unused]] inline std::uint64_t to_concrete(std::uint64_t v,
+CXX_MAYBE_UNUSED inline std::uint64_t to_concrete(std::uint64_t v,
                                                   const std::uint64_t &) {
   return v;
 }
@@ -1045,14 +1191,14 @@ inline double to_concrete(std::int64_t v, const double &) {
 inline double to_concrete(std::uint64_t v, const double &) {
   return static_cast<double>(v);
 }
-[[maybe_unused]] inline double to_concrete(double v, const double &) {
+CXX_MAYBE_UNUSED inline double to_concrete(double v, const double &) {
   return v;
 }
 
 inline double to_concrete(bool v, const double &) {
   return static_cast<double>(v);
 }
-[[maybe_unused]] inline double to_concrete(std::nullptr_t, const double &) {
+CXX_MAYBE_UNUSED inline double to_concrete(std::nullptr_t, const double &) {
   return 0;
 }
 /// \}
@@ -1071,7 +1217,7 @@ inline managed_string_view to_concrete(bool v, const std::string_view &) {
 
   return managed_string_view(std::string_view(bool_string[v]));
 }
-[[maybe_unused]] inline managed_string_view to_concrete(const managed_string_view &s, const std::string_view &) {
+CXX_MAYBE_UNUSED inline managed_string_view to_concrete(const managed_string_view &s, const std::string_view &) {
   return s;
 }
 inline managed_string_view to_concrete(std::nullptr_t, const std::string_view &) {
@@ -2349,6 +2495,7 @@ struct operator_impl<membership> : string_operator_non_destructive {
   }
 };
 
+
 #if WITH_JSON_LOGIC_CPP_EXTENSIONS
 template <>
 struct operator_impl<regex_match>
@@ -2436,6 +2583,9 @@ struct evaluator : forwarding_visitor {
 #if WITH_JSON_LOGIC_CPP_EXTENSIONS
   void visit(const regex_match &) final;
 #endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
+#if ENABLE_OPTIMIZATIONS
+  void visit(const opt_membership_array &) final;
+#endif /* ENABLE_OPTIMIZATIONS */
 
   any_value eval(const expr &);
 
@@ -2496,15 +2646,6 @@ struct sequence_function {
                     if (managed_string_view* pkey = std::get_if<managed_string_view>(&keyval)) {
                       if (pkey->size() == 0)
                         return elem;
-#if OBSOLETE
-                      try {
-                        object_value &o = down_cast<object_value>(**elptr);
-
-                        if (auto pos = o.find(*pkey); pos != o.end())
-                          return to_value(pos->second);
-                      } catch (const type_error &) {
-                      }
-#endif /*OBSOLETE*/
                     }
 
                     return nullptr;
@@ -2527,27 +2668,6 @@ struct sequence_predicate : sequence_function {
   }
 };
 
-// \todo do we still need this class??
-struct sequence_predicate_nondestructive : sequence_function {
-  using sequence_function::sequence_function;
-
-  bool operator()(const any_value &elem) const {
-    return truthy(sequence_function::operator()(elem));
-  }
-};
-
-/*
-  template <class InputIterator, class BinaryOperation>
-  any_expr
-  accumulate_move(InputIterator pos, InputIterator lim, any_expr accu,
-  BinaryOperation binop)
-  {
-    for ( ; pos != lim; ++pos)
-      accu = binop(std::move(accu), std::move(*first));
-
-    return accu;
-  }
-*/
 
 struct sequence_reduction {
   sequence_reduction(expr &e, variant_logger& logstream)
@@ -2791,6 +2911,14 @@ void evaluator::visit(const membership &n) {
   calcres = with_type<array_value const*>(rhs, array_op, string_op);
 }
 
+#if ENABLE_OPTIMIZATIONS
+void evaluator::visit(const opt_membership_array &n) {
+  any_value lhs = eval(n.operand(0));
+  
+  calcres = n.elems().count(lhs) > 0;
+}
+#endif /*ENABLE_OPTIMIZATIONS*/
+
 void evaluator::visit(const substr &n) {
   assert(n.num_evaluated_operands() >= 1);
 
@@ -2881,7 +3009,7 @@ void evaluator::visit(const filter &n) {
     // non destructive predicate is required for evaluating and copying
     std::copy_if(spn.begin(), spn.end(),
                  std::back_inserter(filtered_elements),
-                 sequence_predicate_nondestructive{expr, *calclogger});
+                 sequence_predicate{expr, *calclogger});
 
     return &mk_array_value(std::move(filtered_elements));
   };
@@ -3173,7 +3301,7 @@ std::ostream& operator<<(std::ostream& os, const value_variant& val)
     }
 
     case strv_variant: {
-      os << '"' << std::string_view(std::get<managed_string_view>(val)) << '"';
+      os << '"' << std::get<managed_string_view>(val).view() << '"';
       break;
     }
 
@@ -3271,158 +3399,3 @@ any_value logic_rule::apply(std::vector<value_variant> vars)  {
 }
 
 }  // namespace jsonlogic
-
-#if UNSUPPORTED_SUPPLEMENTAL
-
-/// traverses the children of a node; does logical_not traverse grandchildren
-void traverseChildren(visitor &v, const oper &node);
-void traverseAllChildren(visitor &v, const oper &node);
-void traverseChildrenReverse(visitor &v, const oper &node);
-
-// only operators have children
-void _traverseChildren(visitor &v, oper::const_iterator aa,
-                       oper::const_iterator zz) {
-  std::for_each(aa, zz, [&v](const any_expr &e) -> void { e->accept(v); });
-}
-
-void traverseChildren(visitor &v, const oper &node) {
-  oper::const_iterator aa = node.begin();
-
-  _traverseChildren(v, aa, aa + node.num_evaluated_operands());
-}
-
-void traverseAllChildren(visitor &v, const oper &node) {
-  _traverseChildren(v, node.begin(), node.end());
-}
-
-void traverseChildrenReverse(visitor &v, const oper &node) {
-  oper::const_reverse_iterator zz = node.crend();
-  oper::const_reverse_iterator aa = zz - node.num_evaluated_operands();
-
-  std::for_each(aa, zz, [&v](const any_expr &e) -> void { e->accept(v); });
-}
-
-namespace {
-struct SAttributeTraversal : visitor {
-  explicit SAttributeTraversal(visitor &client) : sub(client) {}
-
-  void visit(expr &) final;
-  void visit(oper &) final;
-  void visit(equal &) final;
-  void visit(strict_equal &) final;
-  void visit(not_equal &) final;
-  void visit(strict_not_equal &) final;
-  void visit(less &) final;
-  void visit(greater &) final;
-  void visit(less_or_equal &) final;
-  void visit(greater_or_equal &) final;
-  void visit(logical_and &) final;
-  void visit(logical_or &) final;
-  void visit(logical_not &) final;
-  void visit(logical_not_not &) final;
-  void visit(add &) final;
-  void visit(subtract &) final;
-  void visit(multiply &) final;
-  void visit(divide &) final;
-  void visit(modulo &) final;
-  void visit(min &) final;
-  void visit(max &) final;
-  void visit(map &) final;
-  void visit(reduce &) final;
-  void visit(filter &) final;
-  void visit(all &) final;
-  void visit(none &) final;
-  void visit(some &) final;
-  void visit(merge &) final;
-  void visit(cat &) final;
-  void visit(substr &) final;
-  void visit(membership &) final;
-  void visit(array &n) final;
-  void visit(var &) final;
-  void visit(log &) final;
-
-  void visit(if_expr &) final;
-
-  void visit(null_value &n) final;
-  void visit(bool_value &n) final;
-  void visit(int_value &n) final;
-  void visit(unsigned_int_value &n) final;
-  void visit(real_value &n) final;
-  void visit(string_value &n) final;
-
-  void visit(error &n) final;
-
- private:
-  visitor &sub;
-
-  template <class OperatorNode> inline void _visit(OperatorNode &n) {
-    traverseChildren(*this, n);
-    sub.visit(n);
-  }
-
-  template <class ValueNode> inline void _value(ValueNode &n) { sub.visit(n); }
-};
-
-void SAttributeTraversal::visit(expr &) { throw_type_error(); }
-void SAttributeTraversal::visit(oper &) { throw_type_error(); }
-void SAttributeTraversal::visit(equal &n) { _visit(n); }
-void SAttributeTraversal::visit(strict_equal &n) { _visit(n); }
-void SAttributeTraversal::visit(not_equal &n) { _visit(n); }
-void SAttributeTraversal::visit(strict_not_equal &n) { _visit(n); }
-void SAttributeTraversal::visit(less &n) { _visit(n); }
-void SAttributeTraversal::visit(greater &n) { _visit(n); }
-void SAttributeTraversal::visit(less_or_equal &n) { _visit(n); }
-void SAttributeTraversal::visit(greater_or_equal &n) { _visit(n); }
-void SAttributeTraversal::visit(logical_and &n) { _visit(n); }
-void SAttributeTraversal::visit(logical_or &n) { _visit(n); }
-void SAttributeTraversal::visit(logical_not &n) { _visit(n); }
-void SAttributeTraversal::visit(logical_not_not &n) { _visit(n); }
-void SAttributeTraversal::visit(add &n) { _visit(n); }
-void SAttributeTraversal::visit(subtract &n) { _visit(n); }
-void SAttributeTraversal::visit(multiply &n) { _visit(n); }
-void SAttributeTraversal::visit(divide &n) { _visit(n); }
-void SAttributeTraversal::visit(modulo &n) { _visit(n); }
-void SAttributeTraversal::visit(min &n) { _visit(n); }
-void SAttributeTraversal::visit(max &n) { _visit(n); }
-void SAttributeTraversal::visit(array &n) { _visit(n); }
-void SAttributeTraversal::visit(map &n) { _visit(n); }
-void SAttributeTraversal::visit(reduce &n) { _visit(n); }
-void SAttributeTraversal::visit(filter &n) { _visit(n); }
-void SAttributeTraversal::visit(all &n) { _visit(n); }
-void SAttributeTraversal::visit(none &n) { _visit(n); }
-void SAttributeTraversal::visit(some &n) { _visit(n); }
-void SAttributeTraversal::visit(merge &n) { _visit(n); }
-void SAttributeTraversal::visit(cat &n) { _visit(n); }
-void SAttributeTraversal::visit(substr &n) { _visit(n); }
-void SAttributeTraversal::visit(membership &n) { _visit(n); }
-void SAttributeTraversal::visit(missing &n) { _visit(n); }
-void SAttributeTraversal::visit(missing_some &n) { _visit(n); }
-void SAttributeTraversal::visit(var &n) { _visit(n); }
-void SAttributeTraversal::visit(log &n) { _visit(n); }
-
-void SAttributeTraversal::visit(if_expr &n) { _visit(n); }
-
-#if WITH_JSON_LOGIC_CPP_EXTENSIONS
-void SAttributeTraversal::visit(regex_match &n) { _visit(n); }
-#endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
-
-void SAttributeTraversal::visit(null_value &n) { _value(n); }
-void SAttributeTraversal::visit(bool_value &n) { _value(n); }
-void SAttributeTraversal::visit(int_value &n) { _value(n); }
-void SAttributeTraversal::visit(unsigned_int_value &n) { _value(n); }
-void SAttributeTraversal::visit(real_value &n) { _value(n); }
-void SAttributeTraversal::visit(string_value &n) { _value(n); }
-
-void SAttributeTraversal::visit(error &n) { sub.visit(n); }
-} // namespace
-
-/// AST traversal function that calls v's visit methods in post-fix
-/// order
-void traverseInSAttributeOrder(expr &e, visitor &vis);
-
-void traverseInSAttributeOrder(expr &e, visitor &vis) {
-  SAttributeTraversal trav{vis};
-
-  e.accept(trav);
-}
-#endif /* SUPPLEMENTAL */

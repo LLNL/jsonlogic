@@ -6,12 +6,10 @@
 #include <vector>
 #include <iosfwd>
 #include <iostream>
+#include <unordered_set>
 
 #include "cxx-compat.hpp"
 
-#if !defined(WITH_JSONLOGIC_EXTENSIONS)
-#define WITH_JSONLOGIC_EXTENSIONS 1
-#endif /* !defined(WITH_JSONLOGIC_EXTENSIONS) */
 
 namespace jsonlogic {
 
@@ -282,6 +280,19 @@ struct membership : oper {
   void accept(visitor &) const final;
 };
 
+#if ENABLE_OPTIMIZATIONS
+/// optimized membership test for arrays with constant values
+struct opt_membership_array : oper_n<1> {
+    void accept(visitor &) const final;
+    
+    void set_elems(std::unordered_set<value_variant> els);
+    std::unordered_set<value_variant> const& elems() const;
+  private:
+    std::unordered_set<value_variant> elements;
+};
+#endif /*ENABLE_OPTIMIZATIONS*/
+
+
 /// value classes
 ///   all but object_data are closely aligned with types listed value_variant.
 /// \todo consider using a single value_variant class...
@@ -462,6 +473,11 @@ struct visitor {
   // extensions
   virtual void visit(const regex_match &) = 0;
 #endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
+
+#if ENABLE_OPTIMIZATIONS
+  // extensions
+  virtual void visit(const opt_membership_array &) = 0;
+#endif /* ENABLE_OPTIMIZATIONS */
 };
 
 /// \private
@@ -548,6 +564,10 @@ struct generic_dispatcher : visitor {
   void visit(const regex_match &n) final { res = apply(n, &n); }
 #endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
 
+#if ENABLE_OPTIMIZATIONS
+  void visit(const opt_membership_array &n) final { res = apply(n, &n); }
+#endif /*ENABLE_OPTIMIZATIONS*/
+
   result_type result() && { return std::move(res); }
 
  private:
@@ -577,51 +597,6 @@ auto generic_visit(ast_functor fn, ast_node *n, arguments... args)
   n->accept(disp);
   return std::move(disp).result();
 }
-
-
-#if 0
-
-//
-// logic internal data
-
-/// type for string storage
-/// \note if the compiler uses small string optimization, we cannot
-///       use an std::vector because resizing invalidates the
-///       string_views.
-///       alternatives include forward_list or deque
-using string_table_base = std::set<std::string>;
-
-/// string table ensures lifetime of string exceeds lifetime of string_views
-struct string_table : private string_table_base
-{
-    using string_table_base::size;
-
-    string_table()                               = default;
-    ~string_table()                              = default;
-    string_table(string_table&&)                 = default;
-    string_table& operator=(string_table&&)      = default;
-
-    std::string_view safe_string(std::string v)
-    {
-      auto emplaced = this->emplace(std::move(v));
-
-      std::string_view res = *emplaced.first;
-      return res;
-    }
-
-    template <class iterator>
-    std::string_view safe_string(iterator aa, iterator zz)
-    {
-      return safe_string(std::string(aa, zz));
-    }
-
-  private:
-    string_table(const string_table&)            = delete;
-    string_table& operator=(const string_table&) = delete;
-};
-
-#endif
-
 
 using logic_data_base = std::tuple<any_expr, std::vector<std::string_view>, bool>;
 struct logic_data : logic_data_base
