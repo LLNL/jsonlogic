@@ -1,13 +1,13 @@
 #include <boost/json.hpp>
 #include <boost/json/src.hpp>
 #include <boost/lexical_cast.hpp>
-#include <boost/range/adaptor/transformed.hpp>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <jsonlogic/logic.hpp>
 #include <sstream>
 #include <vector>
+#include <ranges>
 
 enum class ResultStatus : std::uint8_t {
   NoError = 0,  // no error
@@ -141,7 +141,7 @@ jsonlogic::value_variant to_value_variant(const bjsn::value &n) {
   switch (n.kind()) {
   case bjsn::kind::string: {
     const bjsn::string &str = n.get_string();
-    res = std::string_view(str.data(), str.size());
+    res = jsonlogic::managed_string_view(std::string_view(str.data(), str.size()));
     break;
   }
 
@@ -165,27 +165,38 @@ jsonlogic::value_variant to_value_variant(const bjsn::value &n) {
     break;
   }
 
-  case bjsn::kind::null: {
-    res = std::monostate{};
-    break;
-  }
+    case bjsn::kind::null: {
+      res = nullptr;
+      break;
+    }
 
-  default:
-    throw std::runtime_error{"cannot convert"};
+    default:
+      throw std::runtime_error{"cannot convert"};
   }
 
   assert(!res.valueless_by_exception());
   return res;
 }
 
-jsonlogic::any_expr call_apply(settings &config, const bjsn::value &rule,
+std::string variant_to_string(const jsonlogic::value_variant& val)
+{
+  std::stringstream os;
+
+  os << val;
+  return os.str();
+}
+
+std::string call_apply(settings &config, const bjsn::value &rule,
                                const bjsn::value &data) {
   using value_vector = std::vector<jsonlogic::value_variant>;
 
-  if (config.simple_apply)
-    return jsonlogic::apply(rule, data);
-
   jsonlogic::logic_rule logic = jsonlogic::create_logic(rule);
+
+  if (config.simple_apply)
+  {
+    // simple_apply currently not supported; just call apply..
+    return variant_to_string(logic.apply(jsonlogic::json_accessor(data)));
+  }
 
   if (!logic.has_computed_variable_names()) {
     if (config.verbose)
@@ -199,10 +210,9 @@ jsonlogic::any_expr call_apply(settings &config, const bjsn::value &rule,
 
       // extract all variable values into vector
       auto const varvalues =
-          logic.variable_names() | boost::adaptors::transformed(value_maker);
-
-      // NOTE: data's lifetime must extend beyond the call to apply.
-      return logic.apply(value_vector(varvalues.begin(), varvalues.end()));
+          logic.variable_names() | std::views::transform(value_maker);        
+          
+      return variant_to_string(logic.apply(value_vector(varvalues.begin(), varvalues.end())));
     } catch (...) {
     }
   }
@@ -210,7 +220,7 @@ jsonlogic::any_expr call_apply(settings &config, const bjsn::value &rule,
   if (config.verbose)
     std::cerr << "falling back to normal apply" << std::endl;
 
-  return logic.apply(jsonlogic::data_accessor(data));
+  return variant_to_string(logic.apply(jsonlogic::json_accessor(data)));
 }
 
 int main(int argc, const char **argv) {
@@ -282,7 +292,7 @@ int main(int argc, const char **argv) {
     dat.emplace_object();
 
   try {
-    jsonlogic::any_expr res = call_apply(config, rule, dat);
+    std::string res = call_apply(config, rule, dat);
 
     if (config.verbose)
       std::cerr << res << std::endl;
@@ -299,7 +309,6 @@ int main(int argc, const char **argv) {
 
     result_matches_expected = expStream.str() == resStream.str();
     resultStatus = ResultStatus::NoError;
-
   } catch (const std::exception &ex) {
     resultStatus = ResultStatus::Error;
     resultError = ex.what();

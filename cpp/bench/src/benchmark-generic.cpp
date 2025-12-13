@@ -102,9 +102,11 @@ int main(int argc, const char **argv) try {
       data[i].push_back(fake_value(var_types[i]));
     }
   }
-
-  // JL1: Use boost::json::object for each row
+  
   size_t matches = 0;
+
+#if UNSUPPORTED
+  // JL1: Use boost::json::object for each row
   auto jl1_lambda = [&] {
     matches = 0;
     boost::json::object data_obj;
@@ -127,11 +129,12 @@ int main(int argc, const char **argv) try {
     }
   };
   auto jl1_bench = Benchmark("generic-jl1", jl1_lambda);
+#endif /*UNSUPPORTED*/
 
   // JL2: Use create_logic and pass values as tuple
   auto jl2_lambda = [&] {
     matches = 0;
-    auto [logic_rule, ignore1, ignore2] = jsonlogic::create_logic(rule);
+    auto jl2 = jsonlogic::create_logic(rule);
     for (size_t i = 0; i < N; ++i) {
       std::vector<jsonlogic::value_variant> args;
       for (size_t v = 0; v < var_names.size(); ++v) {
@@ -141,11 +144,11 @@ int main(int argc, const char **argv) try {
         else if (std::holds_alternative<double>(val))
           args.push_back(std::get<double>(val));
         else if (std::holds_alternative<std::string>(val))
-          args.push_back(std::get<std::string>(val));
+          args.push_back(jsonlogic::managed_string_view(std::get<std::string>(val)));
         else if (std::holds_alternative<bool>(val))
           args.push_back(std::get<bool>(val));
       }
-      auto result = jsonlogic::apply(logic_rule, args);
+      auto result = jl2.apply(args);
       bool val = jsonlogic::truthy(result);
       if (val)
         ++matches;
@@ -153,14 +156,21 @@ int main(int argc, const char **argv) try {
   };
   auto jl2_bench = Benchmark("generic-jl2", jl2_lambda);
 
+#if UNSUPPORTED
   // Run benchmarks
   auto jl1_results = jl1_bench.run(N_RUNS);
   std::cout << "JL1 matches: " << matches << std::endl;
+#endif /*UNSUPPORTED*/
+  
   auto jl2_results = jl2_bench.run(N_RUNS);
   std::cout << "JL2 matches: " << matches << std::endl;
+#if UNSUPPORTED
   jl1_results.summarize();
+#endif /*UNSUPPORTED*/
   jl2_results.summarize();
+#if UNSUPPORTED  
   jl2_results.compare_to(jl1_results);
+#endif /*UNSUPPORTED*/  
   return 0;
 } catch (const std::exception &e) {
   std::cerr << "Fatal error: " << e.what() << '\n';

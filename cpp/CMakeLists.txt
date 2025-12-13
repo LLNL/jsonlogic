@@ -74,7 +74,6 @@ if(JSONLOGIC_ENABLE_TESTS)
         set(CTEST_BUILD_FLAGS -j${N})
         set(ctest_test_args ${ctest_test_args} PARALLEL_LEVEL ${N})
     endif()
-    
     add_subdirectory(tests)
 endif()
 
@@ -99,8 +98,7 @@ if(EXISTS "${COMPILE_COMMANDS_SOURCE}")
                 "${COMPILE_COMMANDS_LINK}"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/build"
         RESULT_VARIABLE symlink_result
-    )
-    
+)
     if(symlink_result EQUAL 0)
         message(STATUS "Created symlink: ${COMPILE_COMMANDS_LINK} -> ${COMPILE_COMMANDS_SOURCE}")
     else()

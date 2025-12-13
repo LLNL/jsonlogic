@@ -162,11 +162,13 @@ int main(int argc, const char **argv) try {
   size_t matches = 0;
   auto jl_lambda = [&] {
     matches = 0;
+    auto rule = jsonlogic::create_logic(jv_xy);
+
     for (size_t i = 0; i < N; ++i) {
       data_obj["x"] = xs[i];
       data_obj["y"] = ys[i];
-      auto data = boost::json::value_from(data_obj);
-      auto v_xy = jsonlogic::apply(jv_xy, data);
+      auto accessor = jsonlogic::json_accessor(boost::json::value_from(data_obj));
+      auto v_xy = rule.apply(accessor);
 
       bool val = jsonlogic::truthy(v_xy);
 
@@ -182,9 +184,9 @@ int main(int argc, const char **argv) try {
 
   auto jl2_lambda = [&] {
     matches = 0;
-    auto [rule, ignore1, igmore2] = jsonlogic::create_logic(jv_xy);
+    auto rule = jsonlogic::create_logic(jv_xy);
     for (size_t i = 0; i < N; ++i) {
-      auto v_xy = jsonlogic::apply(rule, {xs[i], ys[i]});
+      auto v_xy = rule.apply({xs[i], ys[i]});
       bool val = jsonlogic::truthy(v_xy);
 
       if (val) {

@@ -1,17 +1,34 @@
 #pragma once
 
-#include <boost/json.hpp>
+#include <memory>
 #include <map>
+#include <set>
 #include <vector>
+#include <iosfwd>
+#include <iostream>
+#include <unordered_set>
 
-#include "ast-core.hpp"
 #include "cxx-compat.hpp"
 
-#if !defined(WITH_JSONLOGIC_EXTENSIONS)
-#define WITH_JSONLOGIC_EXTENSIONS 1
-#endif /* !defined(WITH_JSONLOGIC_EXTENSIONS) */
 
 namespace jsonlogic {
+
+struct visitor;
+
+// the root class
+struct expr {
+  virtual ~expr()               = default;
+  expr()                        = default;
+  expr(expr &&)                 = default;
+  expr(const expr &)            = default;
+  expr &operator=(expr &&)      = default;
+  expr &operator=(const expr &) = default;
+
+  virtual void accept(visitor &) const = 0;
+};
+
+using any_expr = std::unique_ptr<expr>;
+
 struct oper : expr, private std::vector<any_expr> {
   using container_type = std::vector<any_expr>;
 
@@ -30,6 +47,8 @@ struct oper : expr, private std::vector<any_expr> {
   using container_type::reverse_iterator;
   using container_type::size;
 
+  oper() = default;
+
   // convenience function so that the constructor does not need to be
   // implemented in every derived class.
   void set_operands(container_type &&opers) { this->swap(opers); }
@@ -41,6 +60,12 @@ struct oper : expr, private std::vector<any_expr> {
   expr &operand(int n) const;
 
   virtual int num_evaluated_operands() const;
+
+  private:
+    oper(oper &&)                 = delete;
+    oper(const oper &)            = delete;
+    oper &operator=(oper &&)      = delete;
+    oper &operator=(const oper &) = delete;
 };
 
 // defines operators that have an upper bound on how many
@@ -53,22 +78,22 @@ struct oper_n : oper {
 };
 
 struct value_base : expr {
-  virtual boost::json::value to_json() const = 0;
+  virtual value_variant to_variant() const = 0;
 };
 
 template <class T>
 struct value_generic : value_base {
   using value_type = T;
 
-  explicit value_generic(T t) : val(std::move(t)) {}
+  explicit value_generic(value_type t) : val(std::move(t)) {}
 
   // T &value() { return val; }
-  const T &value() const { return val; }
+  const value_type &value() const { return val; }
 
-  boost::json::value to_json() const final;
+  value_variant to_variant() const final;
 
- private:
-  T val;
+private:
+  value_type val;
 };
 
 //
@@ -167,8 +192,10 @@ struct modulo : oper_n<2> {
 
 // array
 
-// arrays serve a dual purpose
-//   they can be considered collections, but also an aggregate value.
+// arrays are considered collections of uninterpreted expressions.
+//   interpreted (evaluated) expressions are stored in a value_array.
+//   the distinction helps to avoid unnecessary copying and interpretation
+//   steps.
 // The class is final and it supports move ctor/assignment, so the data
 //   can move efficiently.
 
@@ -177,15 +204,8 @@ struct array final : oper  // array is modeled as operator
   void accept(visitor &) const final;
 
   array() = default;
-
-  array(array &&other) : oper() {
-    set_operands(std::move(other).move_operands());
-  }
-
-  array &operator=(array &&other) {
-    set_operands(std::move(other).move_operands());
-    return *this;
-  }
+  array(array &&other);
+  array &operator=(array &&other);
 };
 
 struct map : oper_n<2> {
@@ -223,10 +243,10 @@ struct var : oper {
   void accept(visitor &) const final;
 
   void num(int val) { idx = val; }
-  int num() const { return idx; }
+  std::int16_t num() const { return idx; }
 
- private:
-  int idx = computed;
+private:
+  std::int16_t idx = computed;
 };
 
 /// missing is modeled as operator with arbitrary number of arguments
@@ -234,6 +254,7 @@ struct var : oper {
 /// in Calculator::visit(missing&) :
 ///   if the first argument is an array, only the array will be considered
 ///   otherwise all operands are treated as array.
+/// \{
 struct missing : oper {
   void accept(visitor &) const final;
 };
@@ -241,8 +262,10 @@ struct missing : oper {
 struct missing_some : oper_n<2> {
   void accept(visitor &) const final;
 };
+/// \}
 
-// string operations
+/// string operations
+/// \{
 struct cat : oper {
   void accept(visitor &) const final;
 };
@@ -250,13 +273,30 @@ struct cat : oper {
 struct substr : oper_n<3> {
   void accept(visitor &) const final;
 };
+/// \}
 
-// string and array operation implementing "in"
+/// string and array operation implementing "in"
 struct membership : oper {
   void accept(visitor &) const final;
 };
 
-// values
+#if ENABLE_OPTIMIZATIONS
+/// optimized membership test for arrays with constant values
+struct opt_membership_array : oper_n<1> {
+    void accept(visitor &) const final;
+    
+    void set_elems(std::unordered_set<value_variant> els);
+    std::unordered_set<value_variant> const& elems() const;
+  private:
+    std::unordered_set<value_variant> elements;
+};
+#endif /*ENABLE_OPTIMIZATIONS*/
+
+
+/// value classes
+///   all but object_data are closely aligned with types listed value_variant.
+/// \todo consider using a single value_variant class...
+/// \{
 struct null_value : value_base {
   null_value() = default;
   null_value(std::nullptr_t) {}
@@ -265,7 +305,7 @@ struct null_value : value_base {
 
   std::nullptr_t value() const { return nullptr; }
 
-  boost::json::value to_json() const final;
+  value_variant to_variant() const final;
 };
 
 struct bool_value : value_generic<bool> {
@@ -296,15 +336,45 @@ struct real_value : value_generic<double> {
   void accept(visitor &) const final;
 };
 
-struct string_value : value_generic<boost::json::string> {
-  using base = value_generic<boost::json::string>;
+struct string_value : value_generic<managed_string_view> {
+  using base = value_generic<managed_string_view>;
   using base::base;
 
   void accept(visitor &) const final;
 };
 
-struct object_value : expr, private std::map<boost::json::string, any_expr> {
-  using base = std::map<boost::json::string, any_expr>;
+struct array_value : value_base
+{
+    using container_type = std::vector<value_variant>;
+
+    ~array_value()                              = default;
+    array_value(array_value&&)                  = default;
+    array_value& operator=(array_value&&)       = default;
+    array_value(const array_value&)             = default;
+    array_value& operator=(const array_value&)  = default;
+
+    explicit
+    array_value(container_type elems)
+    : vec(std::make_shared<container_type>(std::move(elems)))
+    {}
+
+    value_variant to_variant() const final;
+    container_type const& value() const;
+    const array_value* copy() const;
+    void accept(visitor &) const final;
+
+  private:
+    const std::shared_ptr<container_type> vec;
+
+    array_value()                               = delete;
+};
+
+
+// object types do not seem to have strong support by jsonlogic
+using object_value_data = std::map<std::string_view, any_expr>;
+
+struct object_value : expr, private object_value_data {
+  using base = object_value_data;
   using base::base;
 
   ~object_value() = default;
@@ -322,12 +392,14 @@ struct object_value : expr, private std::map<boost::json::string, any_expr> {
   void accept(visitor &) const final;
 };
 
-// logger
+/// \}
+
+/// logger
 struct log : oper_n<1> {
   void accept(visitor &) const final;
 };
 
-// error node
+/// error node
 struct error : expr {
   void accept(visitor &) const final;
 };
@@ -391,6 +463,8 @@ struct visitor {
   virtual void visit(const unsigned_int_value &) = 0;
   virtual void visit(const real_value &) = 0;
   virtual void visit(const string_value &) = 0;
+  virtual void visit(const array_value &) = 0;
+  //~ virtual void visit(const array_view &) = 0;
   virtual void visit(const object_value &) = 0;
 
   virtual void visit(const error &) = 0;
@@ -399,6 +473,11 @@ struct visitor {
   // extensions
   virtual void visit(const regex_match &) = 0;
 #endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
+
+#if ENABLE_OPTIMIZATIONS
+  // extensions
+  virtual void visit(const opt_membership_array &) = 0;
+#endif /* ENABLE_OPTIMIZATIONS */
 };
 
 /// \private
@@ -474,6 +553,8 @@ struct generic_dispatcher : visitor {
   void visit(const unsigned_int_value &n) final { res = apply(n, &n); }
   void visit(const real_value &n) final { res = apply(n, &n); }
   void visit(const string_value &n) final { res = apply(n, &n); }
+  void visit(const array_value &n) final { res = apply(n, &n); }
+  //~ void visit(const array_view &n) final { res = apply(n, &n); }
   void visit(const object_value &n) final { res = apply(n, &n); }
 
   void visit(const error &n) final { res = apply(n, &n); }
@@ -482,6 +563,10 @@ struct generic_dispatcher : visitor {
   // extensions
   void visit(const regex_match &n) final { res = apply(n, &n); }
 #endif /* WITH_JSON_LOGIC_CPP_EXTENSIONS */
+
+#if ENABLE_OPTIMIZATIONS
+  void visit(const opt_membership_array &n) final { res = apply(n, &n); }
+#endif /*ENABLE_OPTIMIZATIONS*/
 
   result_type result() && { return std::move(res); }
 
@@ -512,4 +597,25 @@ auto generic_visit(ast_functor fn, ast_node *n, arguments... args)
   n->accept(disp);
   return std::move(disp).result();
 }
+
+using logic_data_base = std::tuple<any_expr, std::vector<std::string_view>, bool>;
+struct logic_data : logic_data_base
+{
+  using base = logic_data_base;
+  using base::base;
+
+  /// returns the logic expression
+  any_expr const &syntax_tree() const { return std::get<0>(*this); }
+
+  /// returns static variable names (i.e., variable names that are not computed)
+  std::vector<std::string_view> const &variable_names() const { return std::get<1>(*this); }
+
+  /// returns if the expression contains computed names.
+  bool has_computed_variable_names() const { return std::get<2>(*this); }
+};
+
+
+
+
+
 }  // namespace jsonlogic

@@ -8,10 +8,11 @@
 	"workspaceFolder": "/workspaces/jsonlogic/cpp",
 	"customizations": {
 		"vscode": {
-			"extensions": [
+
+        "extensions": [
 				"llvm-vs-code-extensions.vscode-clangd"
-				// add other extensions as needed
-			]
+            // add other extensions as needed
+        ]
 		}
 	}
 	// "mounts": [

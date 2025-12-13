@@ -1,16 +1,27 @@
-
 #pragma once
 
+#include <memory>
 #include <boost/json.hpp>
 
-#include "details/ast-core.hpp"
+#include "managed_string_view.hpp"
+
+#if !defined(WITH_JSONLOGIC_EXTENSIONS)
+// turn on to enable regex matching
+#define WITH_JSONLOGIC_EXTENSIONS 1
+#endif /* !defined(WITH_JSONLOGIC_EXTENSIONS) */
+
+#if !defined(ENABLE_OPTIMIZATIONS)
+// enables experimental optimizations
+#define ENABLE_OPTIMIZATIONS 1
+#endif /* !defined(ENABLE_OPTIMIZATIONS) */
+
 
 namespace jsonlogic {
 
 //
 // exception classes
 
-/// thrown when no type conversion rules are able to satisy an operation's type requirements
+/// thrown when no type conversion rules are able to satisfy an operation's type requirements
 struct type_error : std::runtime_error {
   using base = std::runtime_error;
   using base::base;
@@ -24,29 +35,42 @@ struct variable_resolution_error : std::runtime_error {
 
 
 //
-// API to create an expression
-
-/// result type of create_logic
-// \todo remove dependence on boost::json::string and use std::string_view instead.
-using logic_rule_base = std::tuple<any_expr, std::vector<boost::json::string>, bool>;
-
-/// interprets the json object \ref n as a jsonlogic expression and
-///   returns a jsonlogic representation together with some information
-///   on variables inside the jsonlogic expression.
-logic_rule_base create_logic(boost::json::value n);
-
-//
 // API to evaluate/apply an expression
 
+struct array_value;
+
 /// a type representing views on value types in jsonlogic
-// \todo consider adding std::unique_ptr<boost::json::value> as fallback type.
-using value_variant = std::variant< std::monostate, // or std::nullptr_t ?
-                                    bool,
-                                    std::int64_t,
-                                    std::uint64_t,
-                                    double,
-                                    std::string_view
-                                  >;
+/// \details
+///    (1) the variant contains options for all primitive types + strings and arrays.
+///    (2) some rules treat the absence of a value differently from a null value
+///    \todo document lifetime requirements
+using value_variant_base = std::variant< std::monostate, // not available
+                                         std::nullptr_t, // value is null
+                                         bool,
+                                         std::int64_t,
+                                         std::uint64_t,
+                                         double,
+                                         managed_string_view,
+                                         array_value const*
+                                       >;
+
+struct value_variant : value_variant_base {
+  using base = value_variant_base;
+  using base::base;
+
+  value_variant()
+  : base(std::monostate{})
+  {}
+
+  value_variant(const value_variant&);
+  value_variant(value_variant&&);
+  value_variant& operator=(const value_variant&);
+  value_variant& operator=(value_variant&&);
+
+  ~value_variant();
+};
+
+bool operator==(const value_variant& lhs, const value_variant& rhs);
 
 
 
@@ -67,7 +91,14 @@ using value_variant = std::variant< std::monostate, // or std::nullptr_t ?
 ///     a string_view or std::variant<string_view, int ...> ..
 ///   * consider removing the limitation on any_expr being a value..
 using variable_accessor =
-    std::function<any_expr(const boost::json::value &, int)>;
+    std::function<value_variant(value_variant, int)>;
+
+
+#if DEPRECATED_FIX_STRINGS
+
+// since value_variant contains string_views whose underlying strings may
+//   be dynamically created during rule evaluation, the free standing API
+//   can no longer be supported.
 
 /// evaluates \ref exp and uses \ref vars to query variables from
 ///   the context.
@@ -82,10 +113,10 @@ using variable_accessor =
 ///      throws a variable_resolution_error when a computed variable name
 ///      is requested.
 /// \{
-any_expr apply(const expr &exp, const variable_accessor &var_accessor);
-any_expr apply(const any_expr &exp, const variable_accessor &var_accessor);
-any_expr apply(const any_expr &exp);
-any_expr apply(const any_expr &exp, std::vector<value_variant> vars);
+value_variant apply(const expr &exp, const variable_accessor &var_accessor);
+value_variant apply(const any_expr &exp, const variable_accessor &var_accessor);
+value_variant apply(const any_expr &exp);
+value_variant apply(const any_expr &exp, std::vector<value_variant> vars);
 /// \}
 
 /// evaluates the rule \ref rule with the provided data \ref data.
@@ -97,75 +128,54 @@ any_expr apply(const any_expr &exp, std::vector<value_variant> vars);
 ///    converts rule to a jsonlogic expression and creates a variable_accessor
 ///    to query variables from data, before calling apply() on jsonlogic
 ///    expression.
-any_expr apply(boost::json::value rule, boost::json::value data);
+value_variant apply(boost::json::value rule, boost::json::value data);
+
+#endif /* DEPRECATED_FIX_STRINGS */
 
 /// creates a variable accessor to access data in \ref data.
-variable_accessor data_accessor(boost::json::value data);
+/// \{
+variable_accessor json_accessor(boost::json::value data);
+variable_accessor variant_accessor(std::vector<value_variant> data);
+/// \}
 
 //
 // conversion functions
 
-/// creates a jsonlogic value representation for \ref val
-/// \post any_expr != nullptr
-/// \{
-any_expr to_expr(std::nullptr_t val);
-any_expr to_expr(bool val);
-any_expr to_expr(std::int64_t val);
-any_expr to_expr(std::uint64_t val);
-any_expr to_expr(double val);
-any_expr to_expr(boost::json::string val);
-any_expr to_expr(const boost::json::array &val);
-/// \}
-
-/// creates a value representation for \p n in jsonlogic form.
-/// \param  n any boost::json type, except for boost::json::object
-/// \return a value in jsonlogic form
-/// \throw  an std::logic_error if \p n contains a boost::json::object
-/// \post   any_expr != nullptr
-any_expr to_expr(const boost::json::value &n);
-
-/// creates a value representation for \p val in jsonlogic form.
-any_expr to_expr(value_variant val);
 
 /// creates a json representation from \p e
-boost::json::value to_json(const any_expr &e);
+//~ boost::json::value to_json(const any_expr &e);
 
 /// returns true if \p el is truthy
 /// \details
 ///    truthy performs the appropriate type conversions
 ///    but does not evaluate \p el, in case it is a
 ///    jsonlogic expression.
-bool truthy(const any_expr &el);
+bool truthy(const value_variant &el);
 
 /// returns true if \p el is !truthy
-bool falsy(const any_expr &el);
+bool falsy(const value_variant &el);
 
 /// prints out \p n to \p os
 /// \pre n must be a value
-std::ostream &operator<<(std::ostream &os, any_expr &n);
+std::ostream &operator<<(std::ostream &os, const value_variant &n);
 
+/// result type of create_logic
+//~ using logic_rule_base = std::tuple<any_expr, std::vector<std::string_view>, bool>;
+
+struct logic_data;
 
 /// convenience class providing named accessors to logic_rule_base
-struct logic_rule : logic_rule_base {
-    using base = logic_rule_base;
+struct logic_rule {
+    explicit logic_rule(std::unique_ptr<logic_data>&& rule_data);
+    logic_rule(logic_rule&&);
+    logic_rule& operator=(logic_rule&&);
+    ~logic_rule();
 
-    // no explicit
-    logic_rule(logic_rule_base&& logic_object)
-    : base(std::move(logic_object))
-    {}
+    /// returns the logic expression
+    //~ any_expr const &syntax_tree() const;
 
-    logic_rule(logic_rule&&)            = default;
-    logic_rule& operator=(logic_rule&&) = default;
-    ~logic_rule()                       = default;
-
-    /// the logic expression
-    /// \{
-    any_expr const &syntax_tree() const;
-    // any_expr        expr() &&    { return std::get<0>(std::move(*this)); }
-    /// \}
-
-    /// returns variable names that are not computed.
-    std::vector<boost::json::string> const &variable_names() const;
+    /// returns static variable names (i.e., variable names that are not computed)
+    std::vector<std::string_view> const &variable_names() const;
 
     /// returns if the expression contains computed names.
     bool has_computed_variable_names() const;
@@ -173,24 +183,56 @@ struct logic_rule : logic_rule_base {
     /// evaluates the logic_rule.
     /// \return a jsonlogic value
     /// \throws variable_resolution_error when evaluation accesses a variable
-    any_expr apply() const;
+    value_variant apply() ;
 
     /// evaluates the logic_rule and uses \p var_accessor to query variables.
     /// \param var_accessor a variable accessor to retrieve variables from the context
     /// \return a jsonlogic value
-    any_expr apply(const variable_accessor &var_accessor) const;
+    value_variant apply(const variable_accessor &var_accessor) ;
 
     /// evaluates the logic_rule and uses \p vars to obtain values for non-computed variable names.
     /// \param  vars a variable array with values for non-computed variable names.
     /// \return a jsonlogic value
     /// \throws variable_resolution_error when evaluation accesses a computed variable name
-    any_expr apply(std::vector<value_variant> vars) const;
+    value_variant apply(std::vector<value_variant> vars) ;
+
+    /// returns the data held internally for internal use.
+    logic_data& internal_data();
 
   private:
     logic_rule()                             = delete;
     logic_rule(const logic_rule&)            = delete;
     logic_rule& operator=(const logic_rule&) = delete;
+
+    std::unique_ptr<logic_data> data;
 };
 
+//
+// API to create an expression
+
+
+/// interprets the json object \ref n as a jsonlogic expression and
+///   returns a jsonlogic representation together with some information
+///   on variables inside the jsonlogic expression.
+logic_rule create_logic(const boost::json::value& n);
 
 } // namespace jsonlogic
+
+
+namespace std
+{
+  template <>
+  struct hash<jsonlogic::value_variant_base> {
+    size_t operator()(const jsonlogic::value_variant_base& v) const;
+  };
+
+  template <>
+  struct hash<jsonlogic::value_variant> {
+    size_t operator()(const jsonlogic::value_variant& v) const;
+  };
+
+  template <>
+  struct hash<jsonlogic::array_value> {
+    size_t operator()(const jsonlogic::array_value& v) const;
+  };
+};

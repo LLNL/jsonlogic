@@ -4,7 +4,6 @@
 
 # set(CMAKE_BUILD_TYPE Debug)
 include(FetchContent)
-
 set(BUILD_TESTING OFF) # Disable Faker tests
 FetchContent_Declare(faker
     GIT_REPOSITORY https://github.com/cieslarmichal/faker-cxx.git
@@ -12,7 +11,6 @@ FetchContent_Declare(faker
 )
 
 FetchContent_MakeAvailable(faker)
-
 FetchContent_Declare(
   cxxopts
   GIT_REPOSITORY https://github.com/jarro2783/cxxopts.git
@@ -68,7 +66,6 @@ target_include_directories(jl-bench-membership SYSTEM PRIVATE
 )
 
 target_link_libraries(jl-bench-membership PRIVATE jsonlogic faker-cxx)
-
 
 add_executable(jl-bench-generic src/benchmark-generic.cpp)
 target_include_directories(jl-bench-generic SYSTEM PRIVATE
