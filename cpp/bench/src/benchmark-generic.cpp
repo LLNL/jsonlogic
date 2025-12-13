@@ -66,7 +66,7 @@ int main(int argc, const char **argv) try {
   size_t N = result["nrows"].as<size_t>();
   size_t N_RUNS = result["runs"].as<size_t>();
   size_t SEED = result["seed"].as<size_t>();
-  faker::getGenerator().seed(SEED);
+  // faker::getGenerator().seed(SEED);
 
   // Read and parse input JSON
   auto j = bjsn::parse(read_file(jsonfile));
@@ -102,7 +102,7 @@ int main(int argc, const char **argv) try {
       data[i].push_back(fake_value(var_types[i]));
     }
   }
-  
+
   size_t matches = 0;
 
 #if UNSUPPORTED
@@ -144,7 +144,8 @@ int main(int argc, const char **argv) try {
         else if (std::holds_alternative<double>(val))
           args.push_back(std::get<double>(val));
         else if (std::holds_alternative<std::string>(val))
-          args.push_back(jsonlogic::managed_string_view(std::get<std::string>(val)));
+          args.push_back(
+              jsonlogic::managed_string_view(std::get<std::string>(val)));
         else if (std::holds_alternative<bool>(val))
           args.push_back(std::get<bool>(val));
       }
@@ -161,16 +162,16 @@ int main(int argc, const char **argv) try {
   auto jl1_results = jl1_bench.run(N_RUNS);
   std::cout << "JL1 matches: " << matches << std::endl;
 #endif /*UNSUPPORTED*/
-  
+
   auto jl2_results = jl2_bench.run(N_RUNS);
   std::cout << "JL2 matches: " << matches << std::endl;
 #if UNSUPPORTED
   jl1_results.summarize();
 #endif /*UNSUPPORTED*/
   jl2_results.summarize();
-#if UNSUPPORTED  
+#if UNSUPPORTED
   jl2_results.compare_to(jl1_results);
-#endif /*UNSUPPORTED*/  
+#endif /*UNSUPPORTED*/
   return 0;
 } catch (const std::exception &e) {
   std::cerr << "Fatal error: " << e.what() << '\n';
