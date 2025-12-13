@@ -140,7 +140,7 @@ int main(int argc, const char **argv) try {
     SEED = std::stoul(args[3]);
   }
 
-  faker::getGenerator().seed(SEED);
+  // faker::getGenerator().seed(SEED);
   std::vector<uint64_t> xs;
   xs.reserve(N);
   std::vector<uint64_t> ys;
@@ -167,7 +167,8 @@ int main(int argc, const char **argv) try {
     for (size_t i = 0; i < N; ++i) {
       data_obj["x"] = xs[i];
       data_obj["y"] = ys[i];
-      auto accessor = jsonlogic::json_accessor(boost::json::value_from(data_obj));
+      auto accessor =
+          jsonlogic::json_accessor(boost::json::value_from(data_obj));
       auto v_xy = rule.apply(accessor);
 
       bool val = jsonlogic::truthy(v_xy);
