@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdio>
 #include <dlfcn.h>
+#include <faker-cxx/faker.h>
 #include <faker-cxx/location.h>
 #include <faker-cxx/number.h>
 #include <filesystem>
