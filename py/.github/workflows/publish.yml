@@ -1,4 +1,5 @@
 name: Publish distribution to PyPI
+working-directory: py/
 on:
   release:
     types: [published]
