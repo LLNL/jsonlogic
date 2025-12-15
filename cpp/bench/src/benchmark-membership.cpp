@@ -46,7 +46,7 @@ int main(int argc, const char **argv) try {
     return 1;
   }
 
-  // faker::getGenerator().seed(SEED);
+  faker::getGenerator().seed(SEED);
   std::set<uint64_t> haystack_set;
   boost::json::array haystack;
   std::vector<uint64_t> xs;
@@ -54,7 +54,7 @@ int main(int argc, const char **argv) try {
   std::cout << "done initializing data\n";
   std::cout << "N: " << N << "\n";
   std::cout << "N_RUNS: " << N_RUNS << "\n";
-  // std::cout << "SEED: " << SEED << "\n";
+  std::cout << "SEED: " << SEED << "\n";
   std::cout << "HAYSTACK_SZ: " << HAYSTACK_SZ << "\n";
   std::cout << "HAYSTACK_RANGE_: " << HAYSTACK_RANGE << "\n";
 
