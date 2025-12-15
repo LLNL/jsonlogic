@@ -140,7 +140,7 @@ int main(int argc, const char **argv) try {
     SEED = std::stoul(args[3]);
   }
 
-  // faker::getGenerator().seed(SEED);
+  faker::getGenerator().seed(SEED);
   std::vector<uint64_t> xs;
   xs.reserve(N);
   std::vector<uint64_t> ys;

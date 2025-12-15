@@ -7,7 +7,7 @@ include(FetchContent)
 set(BUILD_TESTING OFF) # Disable Faker tests
 FetchContent_Declare(faker
     GIT_REPOSITORY https://github.com/cieslarmichal/faker-cxx.git
-    GIT_TAG v4.0.1
+    GIT_TAG v4.1.0
 )
 
 FetchContent_MakeAvailable(faker)

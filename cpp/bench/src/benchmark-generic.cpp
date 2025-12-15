@@ -66,7 +66,7 @@ int main(int argc, const char **argv) try {
   size_t N = result["nrows"].as<size_t>();
   size_t N_RUNS = result["runs"].as<size_t>();
   size_t SEED = result["seed"].as<size_t>();
-  // faker::getGenerator().seed(SEED);
+  faker::getGenerator().seed(SEED);
 
   // Read and parse input JSON
   auto j = bjsn::parse(read_file(jsonfile));
