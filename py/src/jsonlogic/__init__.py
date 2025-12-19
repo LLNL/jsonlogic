@@ -17,16 +17,16 @@ class Operand(Entity):
             setattr(cls, dunder, lambda self, *x, o=op: Expression(o, self, *x))
         return super().__new__(cls)
 
-    def prepare(self) -> Any:
+    def _prepare(self) -> Any:
         """prepares the structure for json by converting it into something that can be dumped"""
         raise NotImplementedError()
 
-    def to_json(self) -> str:
+    def _to_json(self) -> str:
         """represents the object as JSON"""
-        return json.dumps(self.prepare())
+        return json.dumps(self._prepare())
 
     def __str__(self):
-        return self.to_json()
+        return self._to_json()
 
 
 class Literal(Operand):
@@ -46,8 +46,8 @@ class Literal(Operand):
     def __str__(self):
         return str(self.type)
 
-    def prepare(self) -> PyJsonType:
-        return self.type.prepare()
+    def _prepare(self) -> PyJsonType:
+        return self.type._prepare()
 
 
 class Variable(Operand):
@@ -59,7 +59,7 @@ class Variable(Operand):
         if docstr is not None:
             self.__doc__ = docstr
 
-    def prepare(self):
+    def _prepare(self):
         return {"var": self.var}
 
 
@@ -83,10 +83,10 @@ class Expression(Operand):
         # add the remaining variables, casting them to Literals if they're not Variables, Expressions, or Literals.
         self.on = tuple(Literal(o) if not isinstance(o, Operand) else o for o in on)
 
-    def prepare(self):
+    def _prepare(self):
         return {
-            str(self.op): [self.o1.prepare()]
-            + list(x.prepare() if isinstance(x, Operand) else x for x in self.on)
+            str(self.op): [self.o1._prepare()]
+            + list(x._prepare() if isinstance(x, Operand) else x for x in self.on)
         }
 
 
@@ -126,3 +126,6 @@ class Expression(Operand):
 
 # class _Any(Type, Any):
 #     """Type representing any JSONLogic type"""
+
+
+__all__ = ["Operation", "Operand", "Literal", "Variable", "Expression"]

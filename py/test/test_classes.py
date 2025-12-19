@@ -4,8 +4,6 @@ import sys
 sys.path.append("src")
 
 from jsonlogic import Expression, Variable, Literal, Operand, Operation
-from jsonlogic.classes import Entity
-from dataclasses import dataclass
 
 
 @pytest.fixture
@@ -40,13 +38,13 @@ def l2():
 
 def test_expression(op1, op2, v1, v2, l1, l2):
     e = Expression(op1, v1)
-    assert e.to_json() == str(e) == '{"op1": [{"var": "var1"}]}'
+    assert e._to_json() == str(e) == '{"op1": [{"var": "var1"}]}'
 
     e = Expression(op2, v1, v2)
-    assert e.to_json() == str(e) == '{"op2": [{"var": "var1"}, {"var": "var2"}]}'
+    assert e._to_json() == str(e) == '{"op2": [{"var": "var1"}, {"var": "var2"}]}'
 
     e = Expression(op2, v1, l1)
-    assert e.to_json() == str(e) == '{"op2": [{"var": "var1"}, 5]}'
+    assert e._to_json() == str(e) == '{"op2": [{"var": "var1"}, 5]}'
 
 
 def test_operations():
@@ -63,4 +61,4 @@ def test_literals(l1, l2):
 def test_operand():
     o = Operand()
     with pytest.raises(NotImplementedError):
-        o.prepare()
+        o._prepare()

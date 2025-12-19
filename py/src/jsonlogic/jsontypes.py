@@ -22,7 +22,7 @@ class JsonType(ABC):
     def __str__(self):
         return f"[{self.typename}]{self.val}"
 
-    def prepare(self) -> PyJsonType:
+    def _prepare(self) -> PyJsonType:
         """Prepares the type for JSON serialization"""
         raise NotImplementedError("class has not defined prepare()")
 
@@ -32,7 +32,7 @@ class JsonNumber(JsonType):
 
     typename = "Number"
 
-    def prepare(self):
+    def _prepare(self):
         return int(self.val) if isinstance(self.val, int) else float(self.val)
 
 
@@ -41,7 +41,7 @@ class JsonBool(JsonType):
 
     typename = "Boolean"
 
-    def prepare(self) -> bool:
+    def _prepare(self) -> bool:
         return bool(self.val)
 
 
@@ -50,7 +50,7 @@ class JsonStr(JsonType):
 
     typename = "String"
 
-    def prepare(self) -> str:
+    def _prepare(self) -> str:
         return str(self.val)
 
 
@@ -59,7 +59,7 @@ class JsonArray(JsonType):
 
     typename = "Array"
 
-    def prepare(self) -> list:
+    def _prepare(self) -> list:
         return list(self.val)
 
 
@@ -68,7 +68,7 @@ class JsonObj(JsonType):
 
     typename = "Object"
 
-    def prepare(self) -> dict:
+    def _prepare(self) -> dict:
         return dict(self.val)
 
 

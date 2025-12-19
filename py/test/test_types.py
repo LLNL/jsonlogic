@@ -12,7 +12,7 @@ def test_bool():
     assert b.val is True
     assert isinstance(b.val, bool)
     assert str(b) == "[Boolean]True"
-    assert b.prepare() is True
+    assert b._prepare() is True
 
 
 def test_int():
@@ -21,7 +21,7 @@ def test_int():
     assert b.val == 10
     assert isinstance(b.val, int)
     assert str(b) == "[Number]10"
-    assert b.prepare() == 10
+    assert b._prepare() == 10
 
 
 def test_float():
@@ -30,7 +30,7 @@ def test_float():
     assert b.val == 10.1
     assert isinstance(b.val, float)
     assert str(b) == "[Number]10.1"
-    assert b.prepare() == 10.1
+    assert b._prepare() == 10.1
 
 
 def test_dict():
@@ -40,7 +40,7 @@ def test_dict():
     assert b.val == d
     assert isinstance(b.val, dict)
     assert str(b).startswith("[Object]")
-    assert b.prepare() == d
+    assert b._prepare() == d
 
 
 def test_str():
@@ -49,7 +49,7 @@ def test_str():
     assert b.val == "hello"
     assert isinstance(b.val, str)
     assert str(b).startswith("[String]")
-    assert b.prepare() == "hello"
+    assert b._prepare() == "hello"
 
 
 def test_list():
@@ -59,7 +59,7 @@ def test_list():
     assert b.val == d
     assert isinstance(b.val, list)
     assert str(b).startswith("[Array]")
-    assert b.prepare() == d
+    assert b._prepare() == d
 
 
 def test_deduce():
@@ -82,4 +82,4 @@ def test_jsontype():
     assert tt.typename == "UNDEFINED"
     assert str(tt) == "[UNDEFINED]10"
     with pytest.raises(NotImplementedError):
-        tt.prepare()
+        tt._prepare()

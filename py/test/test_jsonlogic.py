@@ -41,7 +41,7 @@ def _s():
 
 
 def assert_op(e: jl.Expression, d):
-    assert jsonLogic(e.prepare(), d)
+    assert jsonLogic(e._prepare(), d)
 
 
 def test_lt_gt_ne(_s, _i, _f):
