@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jsonlogic-py"
-version = "0.2"
+version = "0.2.1"
 authors = [
   { name="Peter Pirkelbauer"}, { name="Seth Bromberger"}
 ]
@@ -24,7 +24,10 @@ classifiers = [
 dependencies = {file = ["requirements.txt"]}
 optional-dependencies = {dev = {file = ["requirements-dev.txt"] }}
 
+[tool.setuptools.package-data]
+jsonlogic = ["py.typed"]
 
 [project.urls]
 Homepage = "https://github.com/MetallData/jsonlogic"
 Issues = "https://github.com/MetallData/jsonlogic/issues"
+

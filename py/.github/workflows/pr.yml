@@ -20,9 +20,9 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
 
-      - name: Lint with flake8
+      - name: Lint with ruff
         run: |
-          flake8 src/jsonlogic --count --show-source --statistics --max-line-length=120
+          ruff check src/jsonlogic --output-format=concise --statistics --line-length=120
 
 
       - name: MyPy

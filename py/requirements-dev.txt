@@ -1,5 +1,5 @@
 pytest
 coverage
 json-logic-qubit
-flake8
+ruff
 mypy
