@@ -55,12 +55,12 @@ class Variable(Operand):
 
     def __init__(self, var: str, docstr: str | None = None):
         super().__init__()
-        self.var = var
+        self._var = var
         if docstr is not None:
             self.__doc__ = docstr
 
     def _prepare(self):
-        return {"var": self.var}
+        return {"var": self._var}
 
 
 class Expression(Operand):
